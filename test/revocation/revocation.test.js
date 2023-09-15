@@ -1,11 +1,12 @@
-import sinon from 'sinon';
-import { expect } from 'chai';
+const sinon = require('sinon');
+const { expect } = require('chai');
 
-import bootstrap from '../test_helper.js';
+const bootstrap = require('../test_helper');
 
 const route = '/token/revocation';
+
 describe('revocation features', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   describe('enriched discovery', () => {
     it('shows the url now', function () {

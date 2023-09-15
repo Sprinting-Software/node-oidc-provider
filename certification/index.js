@@ -1,5 +1,7 @@
+/* eslint-disable global-require */
+
 if (process.env.FAPI) {
-  await import('./fapi/index.js');
+  require('./fapi');
 } else {
-  await import('./oidc/index.js');
+  require('./oidc');
 }

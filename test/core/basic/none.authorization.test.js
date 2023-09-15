@@ -1,13 +1,14 @@
-import { expect } from 'chai';
+const { expect } = require('chai');
 
-import bootstrap from '../../test_helper.js';
+const bootstrap = require('../../test_helper');
 
 const route = '/auth';
 const response_type = 'none';
 const scope = 'openid';
+
 ['get', 'post'].forEach((verb) => {
   describe(`${verb} ${route} response_type=none`, () => {
-    before(bootstrap(import.meta.url));
+    before(bootstrap(__dirname));
 
     before(function () { return this.login(); });
     after(function () { return this.logout(); });
@@ -19,7 +20,7 @@ const scope = 'openid';
       });
 
       return this.wrap({ route, verb, auth })
-        .expect(303)
+        .expect(302)
         .expect(auth.validatePresence(['state']))
         .expect(auth.validateState)
         .expect(auth.validateClientLocation);
@@ -33,7 +34,7 @@ const scope = 'openid';
       });
 
       return this.wrap({ route, verb, auth })
-        .expect(303)
+        .expect(302)
         .expect(auth.validateFragment)
         .expect(auth.validatePresence(['state']))
         .expect(auth.validateState)

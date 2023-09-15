@@ -1,8 +1,7 @@
-import merge from 'lodash/merge.js';
+const cloneDeep = require('lodash/cloneDeep');
+const merge = require('lodash/merge');
 
-import getConfig from '../default.config.js';
-
-const config = getConfig();
+const config = cloneDeep(require('../default.config'));
 
 config.subjectTypes = ['public', 'pairwise'];
 merge(config.features, {
@@ -11,7 +10,7 @@ merge(config.features, {
   clientCredentials: { enabled: true },
 });
 
-export default {
+module.exports = {
   config,
   clients: [{
     client_id: 'client',

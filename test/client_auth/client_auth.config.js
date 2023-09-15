@@ -1,31 +1,19 @@
-import { X509Certificate } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+const cloneDeep = require('lodash/cloneDeep');
+const merge = require('lodash/merge');
 
-import cloneDeep from 'lodash/cloneDeep.js';
-import merge from 'lodash/merge.js';
-
-import key from '../client.sig.key.js';
-import getConfig from '../default.config.js';
-
-const mtlsKeys = JSON.parse(
-  readFileSync('test/jwks/jwks.json', {
-    encoding: 'utf-8',
-  }),
-);
-
-const config = getConfig();
+const config = cloneDeep(require('../default.config'));
+const {
+  e, n, kid, kty, use,
+} = require('../client.sig.key');
+const mtlsKeys = require('../jwks/jwks.json');
 
 const clientKey = {
-  e: key.e,
-  n: key.n,
-  kid: key.kid,
-  kty: key.kty,
-  use: key.use,
+  e, n, kid, kty, use,
 };
 const rsaKeys = cloneDeep(mtlsKeys);
 rsaKeys.keys.splice(0, 1);
 
-config.clientAuthMethods = [
+config.tokenEndpointAuthMethods = [
   'none',
   'client_secret_basic',
   'client_secret_post',
@@ -41,22 +29,18 @@ merge(config.features, {
     selfSignedTlsClientAuth: true,
     tlsClientAuth: true,
     getCertificate(ctx) {
-      try {
-        return new X509Certificate(Buffer.from(ctx.get('x-ssl-client-cert'), 'base64'));
-      } catch (e) {
-        return undefined;
-      }
+      return ctx.get('x-ssl-client-cert');
     },
     certificateAuthorized(ctx) {
       return ctx.get('x-ssl-client-verify') === 'SUCCESS';
     },
-    certificateSubjectMatches(ctx, property, expected) {
-      return property === 'tls_client_auth_san_dns' && ctx.get('x-ssl-client-san-dns') === expected;
+    certificateSubjectMatches(ctx, key, expected) {
+      return key === 'tls_client_auth_san_dns' && ctx.get('x-ssl-client-san-dns') === expected;
     },
   },
 });
 
-export default {
+module.exports = {
   config,
   clients: [{
     token_endpoint_auth_method: 'none',
@@ -89,7 +73,7 @@ export default {
   }, {
     token_endpoint_auth_method: 'client_secret_jwt',
     client_id: 'client-jwt-secret',
-    client_secret: 'secret',
+    client_secret: 'its64bytes_____________________________________________________!',
     grant_types: ['foo'],
     response_types: [],
     redirect_uris: [],

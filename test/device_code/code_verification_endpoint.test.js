@@ -1,16 +1,14 @@
-import { createSandbox } from 'sinon';
-import { expect } from 'chai';
-import timekeeper from 'timekeeper';
+const sinon = require('sinon').createSandbox();
+const { expect } = require('chai');
+const timekeeper = require('timekeeper');
 
-import bootstrap, { passInteractionChecks } from '../test_helper.js';
-
-const sinon = createSandbox();
+const bootstrap = require('../test_helper');
 
 const { any } = sinon.match;
 const route = '/device';
 
 describe('GET code_verification endpoint', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   describe('when accessed without user_code in query (verification_uri)', () => {
     it('renders 200 OK end-user form with csrf', function () {
@@ -53,7 +51,7 @@ describe('GET code_verification endpoint', () => {
 });
 
 describe('POST code_verification endpoint w/o verification', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
   before(function () { return this.login(); });
   afterEach(() => timekeeper.reset());
 
@@ -286,7 +284,7 @@ describe('POST code_verification endpoint w/o verification', () => {
 });
 
 describe('POST code_verification endpoint w/ verification', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
   before(function () {
     return this.login({
       scope: 'openid email',
@@ -302,7 +300,7 @@ describe('POST code_verification endpoint w/ verification', () => {
     this.getSession().state = { secret: xsrf };
   });
 
-  passInteractionChecks('native_client_prompt', 'op_claims_missing', () => {
+  bootstrap.passInteractionChecks('native_client_prompt', 'op_claims_missing', () => {
     it('accepts an abort command', async function () {
       const spy = sinon.spy(i(this.provider).configuration('features.deviceFlow'), 'userCodeInputSource');
 
@@ -319,7 +317,6 @@ describe('POST code_verification endpoint w/ verification', () => {
       await this.agent.post(route)
         .send({
           xsrf,
-          confirm: '',
           abort: 'yes',
           user_code: 'FOO',
         })

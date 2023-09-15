@@ -1,8 +1,8 @@
-import sinon from 'sinon';
-import { expect } from 'chai';
+const sinon = require('sinon');
+const { expect } = require('chai');
 
-import bootstrap from '../test_helper.js';
-import epochTime from '../../lib/helpers/epoch_time.js';
+const bootstrap = require('../test_helper');
+const epochTime = require('../../lib/helpers/epoch_time');
 
 const route = '/auth';
 const response_type = 'code';
@@ -10,7 +10,7 @@ const scope = 'openid';
 const verb = 'get';
 
 describe('session exp handling', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   afterEach(function () {
     try {
@@ -23,7 +23,7 @@ describe('session exp handling', () => {
     await this.login();
     const session = this.getSession();
     const oldSessionId = this.getSessionId();
-    session.exp = epochTime() - 300;
+    session.exp = epochTime();
 
     sinon.spy(this.TestAdapter.for('Session'), 'destroy');
 
@@ -33,7 +33,7 @@ describe('session exp handling', () => {
     });
 
     await this.wrap({ route, verb, auth })
-      .expect(303)
+      .expect(302)
       .expect(auth.validateInteractionRedirect)
       .expect(auth.validateInteraction('login', 'no_session'));
 
@@ -61,7 +61,7 @@ describe('session exp handling', () => {
       });
 
       await this.wrap({ route, verb, auth })
-        .expect(303)
+        .expect(302)
         .expect(auth.validatePresence(['code', 'state']))
         .expect(auth.validateState)
         .expect(auth.validateClientLocation);
@@ -84,7 +84,7 @@ describe('session exp handling', () => {
       });
 
       await this.wrap({ route, verb, auth })
-        .expect(303)
+        .expect(302)
         .expect(auth.validateInteractionRedirect)
         .expect(auth.validateInteraction('login', 'no_session'));
 

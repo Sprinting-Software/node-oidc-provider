@@ -1,15 +1,11 @@
-import merge from 'lodash/merge.js';
+const cloneDeep = require('lodash/cloneDeep');
+const merge = require('lodash/merge');
 
-import { Prompt, Check, base } from '../../../lib/helpers/interaction_policy/index.js';
-import getConfig from '../../default.config.js';
-
-const config = getConfig();
+const config = cloneDeep(require('../../default.config'));
+const { Prompt, Check, base } = require('../../../lib/helpers/interaction_policy');
 
 config.extraParams = ['triggerCustomFail'];
-merge(config.features, {
-  pushedAuthorizationRequests: { enabled: false },
-  requestObjects: { requestUri: false, request: false },
-});
+merge(config.features, { requestObjects: { requestUri: false } });
 config.responseTypes = ['id_token', 'code', 'none'];
 config.allowOmittingSingleRegisteredRedirectUri = false;
 
@@ -32,7 +28,7 @@ policy.add(new Prompt({ name: 'unrequestable', requestable: false }));
 
 config.interactions = { policy };
 
-export default {
+module.exports = {
   config,
   clients: [{
     client_id: 'client',

@@ -1,13 +1,13 @@
-import * as url from 'node:url';
+const url = require('url');
 
-import sinon from 'sinon';
-import { decodeJwt } from 'jose';
-import { expect } from 'chai';
+const sinon = require('sinon');
+const { JWT: { decode } } = require('jose2');
+const { expect } = require('chai');
 
-import bootstrap from '../test_helper.js';
+const bootstrap = require('../test_helper');
 
 describe('responds with a id_token containing auth_time', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
   before(function () { return this.login(); });
 
   const response_type = 'id_token';
@@ -23,7 +23,7 @@ describe('responds with a id_token containing auth_time', () => {
     let id_token;
 
     await this.wrap({ route: '/auth', verb: 'get', auth })
-      .expect(303)
+      .expect(302)
       .expect(auth.validateFragment)
       .expect(auth.validatePresence(['id_token', 'state']))
       .expect(auth.validateState)
@@ -32,7 +32,7 @@ describe('responds with a id_token containing auth_time', () => {
         ({ query: { id_token } } = url.parse(response.headers.location, true));
       });
 
-    expect(decodeJwt(id_token)).to.have.property('auth_time');
+    expect(decode(id_token)).to.have.property('auth_time');
   });
 
   context('special cases', () => {
@@ -54,7 +54,7 @@ describe('responds with a id_token containing auth_time', () => {
       let id_token;
 
       await this.wrap({ route: '/auth', verb: 'get', auth })
-        .expect(303)
+        .expect(302)
         .expect(auth.validateFragment)
         .expect(auth.validatePresence(['id_token', 'state']))
         .expect(auth.validateState)
@@ -63,7 +63,7 @@ describe('responds with a id_token containing auth_time', () => {
           ({ query: { id_token } } = url.parse(response.headers.location, true));
         });
 
-      expect(decodeJwt(id_token)).to.have.property('auth_time');
+      expect(decode(id_token)).to.have.property('auth_time');
     });
 
     it('when max_age=0 was requested', async function () {
@@ -76,7 +76,7 @@ describe('responds with a id_token containing auth_time', () => {
       let id_token;
 
       await this.wrap({ route: '/auth', verb: 'get', auth })
-        .expect(303)
+        .expect(302)
         .expect(auth.validateFragment)
         .expect(auth.validatePresence(['id_token', 'state']))
         .expect(auth.validateState)
@@ -85,7 +85,7 @@ describe('responds with a id_token containing auth_time', () => {
           ({ query: { id_token } } = url.parse(response.headers.location, true));
         });
 
-      expect(decodeJwt(id_token)).to.have.property('auth_time');
+      expect(decode(id_token)).to.have.property('auth_time');
     });
   });
 
@@ -99,7 +99,7 @@ describe('responds with a id_token containing auth_time', () => {
     let id_token;
 
     await this.wrap({ route: '/auth', verb: 'get', auth })
-      .expect(303)
+      .expect(302)
       .expect(auth.validateFragment)
       .expect(auth.validatePresence(['id_token', 'state']))
       .expect(auth.validateState)
@@ -108,7 +108,7 @@ describe('responds with a id_token containing auth_time', () => {
         ({ query: { id_token } } = url.parse(response.headers.location, true));
       });
 
-    expect(decodeJwt(id_token)).to.have.property('auth_time');
+    expect(decode(id_token)).to.have.property('auth_time');
   });
 
   it('when client has default_max_age', async function () {
@@ -121,7 +121,7 @@ describe('responds with a id_token containing auth_time', () => {
     let id_token;
 
     await this.wrap({ route: '/auth', verb: 'get', auth })
-      .expect(303)
+      .expect(302)
       .expect(auth.validateFragment)
       .expect(auth.validatePresence(['id_token', 'state']))
       .expect(auth.validateState)
@@ -130,6 +130,6 @@ describe('responds with a id_token containing auth_time', () => {
         ({ query: { id_token } } = url.parse(response.headers.location, true));
       });
 
-    expect(decodeJwt(id_token)).to.have.property('auth_time');
+    expect(decode(id_token)).to.have.property('auth_time');
   });
 });

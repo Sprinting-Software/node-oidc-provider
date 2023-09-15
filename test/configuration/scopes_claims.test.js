@@ -1,6 +1,6 @@
-import { expect } from 'chai';
+const { expect } = require('chai');
 
-import Provider from '../../lib/index.js';
+const { Provider } = require('../../lib');
 
 describe('custom claims', () => {
   it('allows for claims to be added under openid scope using array syntax', () => {

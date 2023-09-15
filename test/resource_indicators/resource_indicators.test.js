@@ -1,22 +1,20 @@
 /* eslint-disable prefer-destructuring */
 
-import { strict as assert } from 'node:assert';
+const { strict: assert } = require('assert');
 
-import sinon from 'sinon';
-import { expect } from 'chai';
+const sinon = require('sinon');
+const { expect } = require('chai');
 
-import bootstrap from '../test_helper.js';
-import { defaults } from '../../lib/helpers/defaults.js';
-
-const { features: { resourceIndicators } } = defaults;
+const bootstrap = require('../test_helper');
+const { features: { resourceIndicators: defaults } } = require('../../lib/helpers/defaults')();
 
 describe('features.resourceIndicators defaults', () => {
   it('defaultResource', async () => {
-    expect(await resourceIndicators.defaultResource()).to.be.undefined;
-    expect(await resourceIndicators.defaultResource(undefined, undefined, ['urn:example:rs'])).to.deep.equal(['urn:example:rs']);
+    expect(await defaults.defaultResource()).to.be.undefined;
+    expect(await defaults.defaultResource(undefined, undefined, ['urn:example:rs'])).to.deep.equal(['urn:example:rs']);
   });
 
-  it('getResourceServerInfo', () => assert.rejects(resourceIndicators.getResourceServerInfo(), (err) => {
+  it('getResourceServerInfo', () => assert.rejects(defaults.getResourceServerInfo(), (err) => {
     expect(err.message).to.equal('invalid_target');
     expect(err.error_description).to.equal('resource indicator is missing, or unknown');
     return true;
@@ -24,10 +22,7 @@ describe('features.resourceIndicators defaults', () => {
 });
 
 describe('features.resourceIndicators', () => {
-  before(bootstrap(import.meta.url));
-  afterEach(function () {
-    this.provider.removeAllListeners();
-  });
+  before(bootstrap(__dirname));
   before(function () {
     return this.login({
       resources: {
@@ -87,7 +82,7 @@ describe('features.resourceIndicators', () => {
         });
 
         await this.wrap({ route: '/auth', verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['error', 'error_description', 'state']))
           .expect(auth.validateState)
@@ -97,7 +92,7 @@ describe('features.resourceIndicators', () => {
 
         auth.resource = 'urn:wl:explicit';
         await this.wrap({ route: '/auth', verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['id_token', 'state', 'access_token', 'expires_in', 'token_type', 'scope']))
           .expect(auth.validateState)
@@ -119,7 +114,7 @@ describe('features.resourceIndicators', () => {
         });
 
         await this.wrap({ route: '/auth', verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['id_token', 'state', 'access_token', 'expires_in', 'token_type', 'scope']))
           .expect(auth.validateState)
@@ -145,7 +140,7 @@ describe('features.resourceIndicators', () => {
         });
 
         await this.wrap({ route: '/auth', verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validatePresence(['error', 'error_description', 'state']))
           .expect(auth.validateState)
           .expect(auth.validateClientLocation)
@@ -154,7 +149,7 @@ describe('features.resourceIndicators', () => {
 
         auth.resource = 'urn:wl:explicit';
         await this.wrap({ route: '/auth', verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validatePresence(['code', 'state']))
           .expect(auth.validateState)
           .expect(auth.validateClientLocation);
@@ -220,7 +215,7 @@ describe('features.resourceIndicators', () => {
         });
 
         await this.wrap({ route: '/auth', verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validatePresence(['code', 'state']))
           .expect(auth.validateState)
           .expect(auth.validateClientLocation);
@@ -286,7 +281,7 @@ describe('features.resourceIndicators', () => {
         });
 
         await this.wrap({ route: '/auth', verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validatePresence(['code', 'state']))
           .expect(auth.validateState)
           .expect(auth.validateClientLocation);
@@ -354,7 +349,7 @@ describe('features.resourceIndicators', () => {
         });
 
         await this.wrap({ route: '/auth', verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validatePresence(['code', 'state']))
           .expect(auth.validateState)
           .expect(auth.validateClientLocation);

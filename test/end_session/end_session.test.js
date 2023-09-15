@@ -1,19 +1,17 @@
-import { parse as parseUrl } from 'node:url';
+const { parse: parseUrl } = require('url');
 
-import { createSandbox } from 'sinon';
-import { expect } from 'chai';
-import timekeeper from 'timekeeper';
+const sinon = require('sinon').createSandbox();
+const { expect } = require('chai');
+const timekeeper = require('timekeeper');
 
-import bootstrap from '../test_helper.js';
-import * as JWT from '../../lib/helpers/jwt.js';
-import { InvalidClient, InvalidRequest } from '../../lib/helpers/errors.js';
-
-const sinon = createSandbox();
+const bootstrap = require('../test_helper');
+const JWT = require('../../lib/helpers/jwt');
+const { InvalidClient, InvalidRequest } = require('../../lib/helpers/errors');
 
 const route = '/session/end';
 
 describe('logout endpoint', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
   afterEach(() => timekeeper.reset());
 
   describe('when logged out', () => {
@@ -50,7 +48,7 @@ describe('logout endpoint', () => {
           response_type: 'id_token',
           redirect_uri: 'https://client.example.com/cb',
         })
-        .expect(303)
+        .expect(302)
         .expect((response) => {
           const { query: { id_token: idToken } } = parseUrl(response.headers.location.replace('#', '?'), true);
           this.idToken = idToken;
@@ -191,7 +189,7 @@ describe('logout endpoint', () => {
                   response_type: 'id_token',
                   redirect_uri: 'https://client.example.com/cb',
                 })
-                .expect(303)
+                .expect(302)
                 .expect((response) => {
                   ({ query: { id_token: idToken } } = parseUrl(response.headers.location.replace('#', '?'), true));
                 });
@@ -264,17 +262,28 @@ describe('logout endpoint', () => {
                 expect(postLogoutRedirectUri).to.be.undefined;
               });
           });
+        });
 
-          it('ignores unverified post_logout_redirect_uri', function () {
-            const params = { post_logout_redirect_uri: 'https://client.example.com/logout/cb' };
+        it('without id_token_hint or client_id post_logout_redirect_uri may not be provided', function () {
+          const emitSpy = sinon.spy();
+          const renderSpy = sinon.spy(i(this.provider).configuration(), 'renderError');
+          this.provider.once('end_session.error', emitSpy);
+          const params = {
+            post_logout_redirect_uri: 'https://client.example.com/callback/logout',
+          };
 
-            return this.wrap({ route, verb, params })
-              .expect(200)
-              .expect(() => {
-                const { state: { postLogoutRedirectUri } } = this.getSession();
-                expect(postLogoutRedirectUri).to.be.undefined;
-              });
-          });
+          return this.agent.get(route)
+            .set('Accept', 'text/html')
+            .query(params)
+            .expect(400)
+            .expect(() => {
+              expect(emitSpy.calledOnce).to.be.true;
+              expect(renderSpy.calledOnce).to.be.true;
+              const renderArgs = renderSpy.args[0];
+              expect(renderArgs[1]).to.have.property('error', 'invalid_request');
+              expect(renderArgs[1]).to.have.property('error_description', 'post_logout_redirect_uri can only be used in combination with id_token_hint or client_id');
+              expect(renderArgs[2]).to.be.an.instanceof(InvalidRequest);
+            });
         });
 
         it('validates post_logout_redirect_uri allowed on client', function () {
@@ -330,7 +339,7 @@ describe('logout endpoint', () => {
             id_token_hint: await JWT.sign({
               aud: 'nonexistant',
               iss: this.provider.issuer,
-            }, Buffer.from('secret'), 'HS256'),
+            }, null, 'none'),
           };
 
           return this.agent.get(route)
@@ -355,7 +364,7 @@ describe('logout endpoint', () => {
             id_token_hint: await JWT.sign({
               aud: 'client',
               iss: this.provider.issuer,
-            }, Buffer.from('not THE secret'), 'HS256'),
+            }, null, 'none'),
           };
 
           return this.agent.get(route)
@@ -446,7 +455,7 @@ describe('logout endpoint', () => {
         return this.agent.post('/session/end/confirm')
           .send({ xsrf: '123', logout: 'yes' })
           .type('form')
-          .expect(303)
+          .expect(302)
           .expect((response) => {
             expect(sessionAdapter.destroy.called).to.be.true;
             expect(sessionAdapter.upsert.called).not.to.be.true;
@@ -476,7 +485,7 @@ describe('logout endpoint', () => {
         return this.agent.post('/session/end/confirm')
           .send({ xsrf: '123' })
           .type('form')
-          .expect(303)
+          .expect(302)
           .expect((response) => {
             session = this.getSession();
             expect(session.authorizations.client).to.be.undefined;
@@ -501,7 +510,7 @@ describe('logout endpoint', () => {
         return this.agent.post('/session/end/confirm')
           .send({ xsrf: '123' })
           .type('form')
-          .expect(303)
+          .expect(302)
           .expect((response) => {
             session = this.getSession();
             expect(session.authorizations.client).to.be.undefined;
@@ -525,7 +534,7 @@ describe('logout endpoint', () => {
           .expect(() => {
             delete i(this.provider).configuration().cookies.long.domain;
           })
-          .expect(303)
+          .expect(302)
           .expect('location', '/?state=foobar');
       });
 
@@ -543,7 +552,7 @@ describe('logout endpoint', () => {
           .expect(() => {
             delete i(this.provider).configuration().cookies.long.domain;
           })
-          .expect(303);
+          .expect(302);
       });
     });
 

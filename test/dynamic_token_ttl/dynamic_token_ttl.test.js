@@ -1,15 +1,15 @@
-import * as url from 'node:url';
+const url = require('url');
 
-import { expect } from 'chai';
-import sinon from 'sinon';
-import cloneDeep from 'lodash/cloneDeep.js';
+const { expect } = require('chai');
+const sinon = require('sinon');
+const cloneDeep = require('lodash/cloneDeep');
 
-import bootstrap, { skipConsent } from '../test_helper.js';
-import * as JWT from '../../lib/helpers/jwt.js';
+const bootstrap = require('../test_helper');
+const JWT = require('../../lib/helpers/jwt');
 
 describe('dynamic ttl', () => {
-  before(bootstrap(import.meta.url));
-  skipConsent();
+  before(bootstrap(__dirname));
+  bootstrap.skipConsent();
   before(function () {
     this.prev = cloneDeep(i(this.provider).configuration('ttl'));
   });
@@ -109,7 +109,7 @@ describe('dynamic ttl', () => {
     });
 
     await this.wrap({ route: '/auth', verb: 'get', auth })
-      .expect(303)
+      .expect(302)
       .expect(auth.validateFragment)
       .expect(({ headers: { location } }) => {
         const { query: { expires_in, id_token } } = url.parse(location, true);
@@ -148,7 +148,7 @@ describe('dynamic ttl', () => {
     let code;
 
     await this.wrap({ route: '/auth', verb: 'get', auth })
-      .expect(303)
+      .expect(302)
       .expect(({ headers: { location } }) => {
         ({ query: { code } } = url.parse(location, true));
       });
@@ -186,7 +186,7 @@ describe('dynamic ttl', () => {
     let code;
 
     await this.wrap({ route: '/auth', verb: 'get', auth })
-      .expect(303)
+      .expect(302)
       .expect(({ headers: { location } }) => {
         ({ query: { code } } = url.parse(location, true));
       });

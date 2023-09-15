@@ -1,14 +1,14 @@
-import sinon from 'sinon';
-import { expect } from 'chai';
+const sinon = require('sinon');
+const { expect } = require('chai');
 
-import bootstrap, { skipConsent } from '../../test_helper.js';
+const bootstrap = require('../../test_helper');
 
 const route = '/auth';
 const response_type = 'code id_token';
 const scope = 'openid';
 
 describe('HYBRID code+id_token', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   ['get', 'post'].forEach((verb) => {
     describe(`${verb} ${route} with session`, () => {
@@ -21,7 +21,7 @@ describe('HYBRID code+id_token', () => {
         });
 
         return this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['code', 'id_token', 'state']))
           .expect(auth.validateState)
@@ -35,7 +35,7 @@ describe('HYBRID code+id_token', () => {
         });
 
         return this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['code', 'id_token', 'state']))
           .expect(auth.validateState)
@@ -56,7 +56,7 @@ describe('HYBRID code+id_token', () => {
       });
 
       describe('ignoring the offline_access scope', () => {
-        skipConsent();
+        bootstrap.skipConsent();
 
         it('ignores the scope offline_access unless prompt consent is present', function () {
           const spy = sinon.spy();
@@ -68,7 +68,7 @@ describe('HYBRID code+id_token', () => {
           });
 
           return this.wrap({ route, verb, auth })
-            .expect(303)
+            .expect(302)
             .expect(auth.validateFragment)
             .expect(auth.validateClientLocation)
             .expect(() => {
@@ -87,7 +87,7 @@ describe('HYBRID code+id_token', () => {
           });
 
           return this.wrap({ route, verb, auth })
-            .expect(303)
+            .expect(302)
             .expect(auth.validateFragment)
             .expect(auth.validateClientLocation)
             .expect(() => {
@@ -108,7 +108,7 @@ describe('HYBRID code+id_token', () => {
         });
 
         return this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(() => {
             expect(spy.calledOnce).to.be.true;
           })
@@ -130,7 +130,7 @@ describe('HYBRID code+id_token', () => {
 
         return this.agent.get(route)
           .query(auth)
-          .expect(303)
+          .expect(302)
           .expect(() => {
             expect(spy.calledOnce).to.be.true;
           })

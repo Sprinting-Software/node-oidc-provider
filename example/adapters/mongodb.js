@@ -1,8 +1,8 @@
 /* eslint-disable max-classes-per-file */
 
-// npm i mongodb@^4.3.0
-import { MongoClient } from 'mongodb'; // eslint-disable-line import/no-unresolved
-import snakeCase from 'lodash/snakeCase.js';
+// npm i mongodb@^3.0.0
+const { MongoClient } = require('mongodb'); // eslint-disable-line import/no-unresolved
+const snakeCase = require('lodash/snakeCase');
 
 let DB;
 
@@ -11,7 +11,6 @@ const grantable = new Set([
   'authorization_code',
   'refresh_token',
   'device_code',
-  'backchannel_authentication_request',
 ]);
 
 class CollectionSet extends Set {
@@ -126,9 +125,11 @@ class MongoAdapter {
   // This is not part of the required or supported API, all initialization should happen before
   // you pass the adapter to `new Provider`
   static async connect() {
-    const connection = await MongoClient.connect(process.env.MONGODB_URI);
+    const connection = await MongoClient.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+    });
     DB = connection.db(connection.s.options.dbName);
   }
 }
 
-export default MongoAdapter;
+module.exports = MongoAdapter;

@@ -1,9 +1,9 @@
 /* eslint-disable no-shadow */
-import * as url from 'node:url';
+const url = require('url');
 
-import { expect } from 'chai';
+const { expect } = require('chai');
 
-import bootstrap, { skipConsent } from '../test_helper.js';
+const bootstrap = require('../test_helper');
 
 function assignAuthorizationResponseValues({ headers: { location } }) {
   const { query: { access_token, code } } = url.parse(location, true);
@@ -18,8 +18,8 @@ function assignTokenResponseValues({ body }) {
 }
 
 describe('session bound tokens behaviours', () => {
-  before(bootstrap(import.meta.url));
-  skipConsent();
+  before(bootstrap(__dirname));
+  bootstrap.skipConsent();
 
   beforeEach(function () { return this.login({ scope: 'openid offline_access' }); });
   after(function () { return this.logout(); });
@@ -33,7 +33,7 @@ describe('session bound tokens behaviours', () => {
 
       await this.agent.get('/auth')
         .query(auth)
-        .expect(303)
+        .expect(302)
         .expect(auth.validatePresence(['code', 'state']))
         .expect(auth.validateState)
         .expect(auth.validateClientLocation)
@@ -75,7 +75,7 @@ describe('session bound tokens behaviours', () => {
 
       await this.agent.get('/auth')
         .query(auth)
-        .expect(303)
+        .expect(302)
         .expect(auth.validatePresence(['code', 'state']))
         .expect(auth.validateState)
         .expect(auth.validateClientLocation)
@@ -148,7 +148,7 @@ describe('session bound tokens behaviours', () => {
 
       await this.agent.get('/auth')
         .query(auth)
-        .expect(303)
+        .expect(302)
         .expect(auth.validatePresence(['code', 'state']))
         .expect(auth.validateState)
         .expect(auth.validateClientLocation)
@@ -229,7 +229,7 @@ describe('session bound tokens behaviours', () => {
 
       await this.agent.get('/auth')
         .query(auth)
-        .expect(303)
+        .expect(302)
         .expect(auth.validateFragment)
         .expect(auth.validatePresence(['id_token', 'state', 'access_token', 'expires_in', 'token_type', 'scope']))
         .expect(auth.validateState)

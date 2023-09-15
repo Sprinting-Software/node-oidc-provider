@@ -1,19 +1,18 @@
-import * as crypto from 'node:crypto';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
+const crypto = require('crypto');
 
-import { dirname } from 'desm';
+const pkg = require('../package.json');
+const enabledJWA = JSON.parse(JSON.stringify(require('../lib/consts/jwa')));
+const { InvalidClientMetadata } = require('../lib/helpers/errors');
 
-const pkg = JSON.parse(
-  fs.readFileSync(path.resolve(dirname(import.meta.url), '../../package.json'), {
-    encoding: 'utf-8',
-  }),
-);
+function filterOutNone(conf, prop) {
+  // eslint-disable-next-line no-param-reassign
+  conf[prop] = conf[prop].filter((alg) => alg !== 'none');
+}
 
-const enabledJWA = JSON.parse(JSON.stringify(await import('../../lib/consts/jwa.js')));
+Object.keys(enabledJWA).forEach(filterOutNone.bind(undefined, enabledJWA));
 
 const timeout = parseInt(process.env.TIMEOUT, 10);
-const clientAuthMethods = [
+const tokenEndpointAuthMethods = [
   'none',
   'client_secret_basic',
   'client_secret_jwt',
@@ -22,7 +21,17 @@ const clientAuthMethods = [
   'self_signed_tls_client_auth',
 ];
 
-export default {
+module.exports = {
+  clients: [
+    {
+      client_id: 'dpop-heroku',
+      token_endpoint_auth_method: 'none',
+      scope: 'openid offline_access',
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      redirect_uris: ['https://murmuring-journey-60982.herokuapp.com/cb'],
+    },
+  ],
   interactions: {
     url(ctx, interaction) {
       return `/interaction/${interaction.uid}`;
@@ -47,6 +56,13 @@ export default {
     profile: ['birthdate', 'family_name', 'gender', 'given_name', 'locale', 'middle_name', 'name',
       'nickname', 'picture', 'preferred_username', 'profile', 'updated_at', 'website', 'zoneinfo'],
   },
+  clientBasedCORS(ctx, origin, client) {
+    if (client.clientId === 'dpop-heroku' && origin === 'https://murmuring-journey-60982.herokuapp.com') {
+      return true;
+    }
+
+    return false;
+  },
   features: {
     backchannelLogout: { enabled: true },
     devInteractions: { enabled: false },
@@ -55,11 +71,16 @@ export default {
       certificateBoundAccessTokens: true,
       selfSignedTlsClientAuth: true,
       getCertificate(ctx) {
-        try {
-          return new crypto.X509Certificate(Buffer.from(ctx.get('client-certificate'), 'base64'));
-        } catch {
-          return undefined;
+        return unescape(ctx.get('x-ssl-client-cert').replace(/\+/g, ' '));
+      },
+      certificateAuthorized(ctx) {
+        return ctx.get('x-ssl-client-verify') === 'SUCCESS';
+      },
+      certificateSubjectMatches(ctx, property, expected) {
+        if (property !== 'tls_client_auth_subject_dn') {
+          throw new InvalidClientMetadata(`${property} is not supported by this deployment`);
         }
+        return ctx.get('x-ssl-client-s-dn') === expected;
       },
     },
     claimsParameter: { enabled: true },
@@ -164,18 +185,6 @@ export default {
         kty: 'OKP',
         use: 'sig',
         x: 'BG1zKFg6A_Rzix4pA08oYN5xHqhKIiREXZ59NZoA8p3xhgjh-tm8nc-6udtiL5ZNhWDbnRSq4jQA',
-      }, {
-        crv: 'X25519',
-        d: '2FxH51AcogWa_0iVjUngdfu-HBXXt7qdAeqUKLbRwnA',
-        x: 'k78x74A5JRGr8XW75Rpu7W4_cgZFkm_mvToVAXHDgE8',
-        kty: 'OKP',
-        use: 'enc',
-      }, {
-        crv: 'X448',
-        d: 'ONXShn4L3QWTSuXd2JSTzuwQ0ZJHUu39j35owJ_qtXzRCqWVtkjCo7FXYNxo-mwtFR8xkO-hO8Y',
-        x: 'b30-VJpeXpRLcWtQpr75W2YIN4010rHjfV850uK1Ap9RddHw9Bs7VZ-8lE7-nB7X9E8jLB6C_xw',
-        kty: 'OKP',
-        use: 'enc',
       },
     ],
   },
@@ -191,7 +200,7 @@ export default {
   ttl: {
     RegistrationAccessToken: 1 * 24 * 60 * 60,
   },
-  clientAuthMethods,
+  tokenEndpointAuthMethods,
   httpOptions(gotOptions) {
     gotOptions.timeout = timeout || gotOptions.timeout; // eslint-disable-line no-param-reassign
     return gotOptions;
@@ -201,7 +210,7 @@ export default {
       return false;
     }
 
-    return code.scopes.has('offline_access') || (client.applicationType === 'web' && client.clientAuthMethod === 'none');
+    return code.scopes.has('offline_access') || (client.applicationType === 'web' && client.tokenEndpointAuthMethod === 'none');
   },
   enabledJWA,
   pkce: {

@@ -1,6 +1,6 @@
-import { expect } from 'chai';
+const { expect } = require('chai');
 
-import bootstrap from '../test_helper.js';
+const bootstrap = require('../test_helper');
 
 function req(verb, url, origin, ...methods) {
   const request = this.agent[verb](url)
@@ -30,7 +30,7 @@ const ACEHeaders = 'access-control-expose-headers';
 const Vary = 'vary';
 
 describe('CORS setup', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
   before(function () { return this.login(); });
   before(async function () {
     const at = new this.provider.AccessToken({

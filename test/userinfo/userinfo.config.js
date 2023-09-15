@@ -1,6 +1,6 @@
-import getConfig from '../default.config.js';
+const cloneDeep = require('lodash/cloneDeep');
 
-const config = getConfig();
+const config = cloneDeep(require('../default.config'));
 
 config.findAccount = (ctx, id) => {
   if (id === 'notfound') return undefined;
@@ -14,7 +14,7 @@ config.claims = {
   email: ['email', 'email_verified'],
 };
 
-export default {
+module.exports = {
   config,
   client: {
     client_id: 'client',

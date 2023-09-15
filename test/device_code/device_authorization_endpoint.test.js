@@ -1,13 +1,13 @@
-import sinon from 'sinon';
-import { expect } from 'chai';
+const sinon = require('sinon');
+const { expect } = require('chai');
 
-import bootstrap from '../test_helper.js';
-import { normalize } from '../../lib/helpers/user_codes.js';
+const bootstrap = require('../test_helper');
+const { normalize } = require('../../lib/helpers/user_codes');
 
 const route = '/device/auth';
 
 describe('device_authorization_endpoint', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   it('rejects other than application/x-www-form-urlencoded', function () {
     const spy = sinon.spy();
@@ -80,6 +80,7 @@ describe('device_authorization_endpoint', () => {
         return this.agent.post(route)
           .send({
             client_id: 'client',
+            scope: 'openid',
             [param]: 'some',
           })
           .type('form')
@@ -130,7 +131,7 @@ describe('device_authorization_endpoint', () => {
         ]);
         expect(body.verification_uri_complete).to.equal(`${body.verification_uri}?user_code=${body.user_code}`);
         expect(body).to.have.property('verification_uri').that.matches(/\/device$/);
-        expect(body).to.have.property('expires_in').closeTo(600, 1);
+        expect(body).to.have.property('expires_in', 600);
         response = body;
       });
 

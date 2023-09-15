@@ -1,29 +1,29 @@
-import * as url from 'node:url';
+const url = require('url');
 
-import { expect } from 'chai';
-import sinon from 'sinon';
-import {
-  compactDecrypt, CompactEncrypt, decodeJwt, decodeProtectedHeader,
-} from 'jose';
+const { expect } = require('chai');
+const base64url = require('base64url');
+const sinon = require('sinon');
+const jose = require('jose2');
 
-import bootstrap from '../test_helper.js';
-import * as JWT from '../../lib/helpers/jwt.js';
+const bootstrap = require('../test_helper');
+const JWT = require('../../lib/helpers/jwt');
 
-import { keypair } from './encryption.config.js';
+const { privKey } = require('./encryption.config');
 
 const route = '/auth';
 
-const decoder = new TextDecoder();
-const encoder = new TextEncoder();
-
 describe('encryption', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
+  before(function () {
+    this.keystore = jose.JWKS.asKeyStore(privKey);
+  });
   before(function () { return this.login(); });
 
   [
     // symmetric kw
     'A128GCMKW', 'A192GCMKW', 'A256GCMKW', 'A128KW', 'A192KW', 'A256KW',
+    'PBES2-HS256+A128KW', 'PBES2-HS384+A192KW', 'PBES2-HS512+A256KW',
     // no kw
     'dir',
   ].forEach((alg) => {
@@ -53,13 +53,13 @@ describe('encryption', () => {
             scope: 'openid',
           });
 
-          return this.wrap({ route, verb, auth }).expect(303)
+          return this.wrap({ route, verb, auth }).expect(302)
             .expect(auth.validateFragment)
             .expect(auth.validatePresence(['error', 'error_description', 'state']))
             .expect(auth.validateState)
             .expect(auth.validateClientLocation)
             .expect(auth.validateError('invalid_client'))
-            .expect(auth.validateErrorDescription('client secret is expired - cannot issue an encrypted ID Token (A128KW)'));
+            .expect(auth.validateErrorDescription('client secret is expired - cannot issue an encrypted ID Token (PBES2-HS384+A192KW)'));
         });
       });
 
@@ -79,22 +79,17 @@ describe('encryption', () => {
             });
         });
 
-        it('responds with a nested encrypted and signed id_token JWT', async function () {
+        it('responds with a nested encrypted and signed id_token JWT', function () {
           expect(this.id_token).to.be.ok;
           expect(this.id_token.split('.')).to.have.lengthOf(5);
 
-          const { plaintext } = await compactDecrypt(this.id_token, keypair.privateKey);
-          expect(plaintext).to.be.ok;
-          expect(decodeJwt(decoder.decode(plaintext))).to.be.ok;
+          const result = jose.JWE.decrypt(this.id_token, this.keystore);
+          expect(result).to.be.ok;
+          expect(result.toString().split('.')).to.have.lengthOf(3);
+          expect(JWT.decode(result)).to.be.ok;
         });
 
-        it('duplicates iss and aud as JWE Header Parameters in an encrypted ID Token', function () {
-          const header = decodeProtectedHeader(this.id_token);
-          expect(header).to.have.property('iss').eql(this.provider.issuer);
-          expect(header).to.have.property('aud').eql('client');
-        });
-
-        it('handles nested encrypted and signed userinfo JWT', function (done) {
+        it('responds with an encrypted userinfo JWT', function (done) {
           this.agent.get('/me')
             .auth(this.access_token, { type: 'bearer' })
             .expect(200)
@@ -102,20 +97,45 @@ describe('encryption', () => {
             .expect((response) => {
               expect(response.text.split('.')).to.have.lengthOf(5);
             })
-            .end(async (err, response) => {
+            .end((err, response) => {
               if (err) throw err;
-
-              const header = decodeProtectedHeader(response.text);
-              expect(header).to.have.property('iss').eql(this.provider.issuer);
-              expect(header).to.have.property('aud').eql('client');
-
-              const { plaintext } = await compactDecrypt(response.text, keypair.privateKey);
-              expect(plaintext).to.be.ok;
-              const payload = decodeJwt(decoder.decode(plaintext));
-              expect(payload).to.be.ok;
-              expect(payload).to.have.property('exp').above(Date.now() / 1000);
+              const result = jose.JWE.decrypt(response.text, this.keystore);
+              expect(result).to.be.ok;
+              expect(JSON.parse(result)).to.have.keys('sub');
               done();
             });
+        });
+
+        describe('userinfo nested signed and encrypted', () => {
+          before(async function () {
+            const client = await this.provider.Client.find('client');
+            client.userinfoSignedResponseAlg = 'RS256';
+          });
+
+          after(async function () {
+            const client = await this.provider.Client.find('client');
+            client.userinfoSignedResponseAlg = undefined;
+          });
+
+          it('also handles nested encrypted and signed userinfo JWT', function (done) {
+            this.agent.get('/me')
+              .auth(this.access_token, { type: 'bearer' })
+              .expect(200)
+              .expect('content-type', /application\/jwt/)
+              .expect((response) => {
+                expect(response.text.split('.')).to.have.lengthOf(5);
+              })
+              .end((err, response) => {
+                if (err) throw err;
+                const result = jose.JWE.decrypt(response.text, this.keystore);
+                expect(result).to.be.ok;
+                expect(result.toString().split('.')).to.have.lengthOf(3);
+                const decode = JWT.decode(result);
+                expect(decode).to.be.ok;
+                expect(decode.payload).to.have.property('exp').above(Date.now() / 1000);
+                done();
+              });
+          });
         });
 
         describe('userinfo signed - expired client secret', () => {
@@ -127,7 +147,7 @@ describe('encryption', () => {
 
           after(async function () {
             const client = await this.provider.Client.find('client');
-            client.userinfoSignedResponseAlg = 'RS256';
+            client.userinfoSignedResponseAlg = undefined;
             client.clientSecretExpiresAt = 0;
           });
 
@@ -152,7 +172,7 @@ describe('encryption', () => {
           after(async function () {
             const client = await this.provider.Client.find('client');
             client.clientSecretExpiresAt = 0;
-            client.userinfoEncryptedResponseAlg = 'RSA-OAEP';
+            client.userinfoEncryptedResponseAlg = 'RSA1_5';
           });
 
           it('errors with a specific message', function () {
@@ -168,6 +188,39 @@ describe('encryption', () => {
       });
 
       describe('Request Object encryption', () => {
+        it('works with signed by none', async function () {
+          const signed = await JWT.sign({
+            client_id: 'client',
+            response_type: 'code',
+            redirect_uri: 'https://client.example.com/cb',
+          }, null, 'none', { issuer: 'client', audience: this.provider.issuer });
+
+          let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA1_5' });
+          key = await i(this.provider).keystore.getKeyObject(key, 'RSA1_5');
+
+          const encrypted = jose.JWE.encrypt(signed, key, { enc: 'A128CBC-HS256', alg: 'RSA1_5' });
+
+          return this.wrap({
+            route,
+            verb,
+            auth: {
+              request: encrypted,
+              scope: 'openid',
+              client_id: 'client',
+              response_type: 'code',
+            },
+          })
+            .expect(302)
+            .expect((response) => {
+              const expected = url.parse('https://client.example.com/cb', true);
+              const actual = url.parse(response.headers.location, true);
+              ['protocol', 'host', 'pathname'].forEach((attr) => {
+                expect(actual[attr]).to.equal(expected[attr]);
+              });
+              expect(actual.query).to.have.property('code');
+            });
+        });
+
         describe('JAR only request', () => {
           it('fails without any other params even if client_id is replicated in the header', async function () {
             const spy = sinon.spy();
@@ -178,14 +231,12 @@ describe('encryption', () => {
               response_type: 'code',
               redirect_uri: 'https://client.example.com/cb',
               scope: 'openid',
-            }, Buffer.from('secret'), 'HS256', { issuer: 'client', audience: this.provider.issuer });
+            }, null, 'none', { issuer: 'client', audience: this.provider.issuer });
 
-            let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA-OAEP' });
-            key = await i(this.provider).keystore.getKeyObject(key, 'RSA-OAEP');
+            let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA1_5' });
+            key = await i(this.provider).keystore.getKeyObject(key, 'RSA1_5');
 
-            const encrypted = await new CompactEncrypt(encoder.encode(signed))
-              .setProtectedHeader({ enc: 'A128CBC-HS256', alg: 'RSA-OAEP', client_id: 'client' })
-              .encrypt(key);
+            const encrypted = jose.JWE.encrypt(signed, key, { enc: 'A128CBC-HS256', alg: 'RSA1_5', client_id: 'client' });
 
             return this.wrap({
               route,
@@ -208,14 +259,12 @@ describe('encryption', () => {
               response_type: 'code',
               redirect_uri: 'https://client.example.com/cb',
               scope: 'openid',
-            }, Buffer.from('secret'), 'HS256', { issuer: 'client', audience: this.provider.issuer });
+            }, null, 'none', { issuer: 'client', audience: this.provider.issuer });
 
-            let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA-OAEP' });
-            key = await i(this.provider).keystore.getKeyObject(key, 'RSA-OAEP');
+            let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA1_5' });
+            key = await i(this.provider).keystore.getKeyObject(key, 'RSA1_5');
 
-            const encrypted = await new CompactEncrypt(encoder.encode(signed))
-              .setProtectedHeader({ enc: 'A128CBC-HS256', alg: 'RSA-OAEP', iss: 'client' })
-              .encrypt(key);
+            const encrypted = jose.JWE.encrypt(signed, key, { enc: 'A128CBC-HS256', alg: 'RSA1_5', iss: 'client' });
 
             return this.wrap({
               route,
@@ -224,7 +273,7 @@ describe('encryption', () => {
                 request: encrypted,
               },
             })
-              .expect(303)
+              .expect(302)
               .expect((response) => {
                 const expected = url.parse('https://client.example.com/cb', true);
                 const actual = url.parse(response.headers.location, true);
@@ -244,14 +293,12 @@ describe('encryption', () => {
               response_type: 'code',
               redirect_uri: 'https://client.example.com/cb',
               scope: 'openid',
-            }, Buffer.from('secret'), 'HS256', { issuer: 'client', audience: this.provider.issuer });
+            }, null, 'none', { issuer: 'client', audience: this.provider.issuer });
 
-            let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA-OAEP' });
-            key = await i(this.provider).keystore.getKeyObject(key, 'RSA-OAEP');
+            let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA1_5' });
+            key = await i(this.provider).keystore.getKeyObject(key, 'RSA1_5');
 
-            const encrypted = await new CompactEncrypt(encoder.encode(signed))
-              .setProtectedHeader({ enc: 'A128CBC-HS256', alg: 'RSA-OAEP', client_id: 'client' })
-              .encrypt(key);
+            const encrypted = jose.JWE.encrypt(signed, key, { enc: 'A128CBC-HS256', alg: 'RSA1_5', client_id: 'client' });
 
             return this.wrap({
               route,
@@ -280,14 +327,12 @@ describe('encryption', () => {
             client_id: 'client',
             response_type: 'code',
             redirect_uri: 'https://client.example.com/cb',
-          }, Buffer.from('secret'), 'HS256', { issuer: 'client', audience: this.provider.issuer });
+          }, null, 'none', { issuer: 'client', audience: this.provider.issuer });
 
-          let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA-OAEP-512' });
-          key = await i(this.provider).keystore.getKeyObject(key, 'RSA-OAEP-512');
+          let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA-OAEP' });
+          key = await i(this.provider).keystore.getKeyObject(key, 'RSA-OAEP');
 
-          const encrypted = await new CompactEncrypt(encoder.encode(signed))
-            .setProtectedHeader({ enc: 'A128CBC-HS256', alg: 'RSA-OAEP-512' })
-            .encrypt(key);
+          const encrypted = jose.JWE.encrypt(signed, key, { enc: 'A128CBC-HS256', alg: 'RSA-OAEP' });
 
           return this.wrap({
             route,
@@ -311,14 +356,12 @@ describe('encryption', () => {
             client_id: 'client',
             response_type: 'code',
             redirect_uri: 'https://client.example.com/cb',
-          }, Buffer.from('secret'), 'HS256', { issuer: 'client', audience: this.provider.issuer });
+          }, null, 'none', { issuer: 'client', audience: this.provider.issuer });
 
-          let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA-OAEP-512' });
-          key = await i(this.provider).keystore.getKeyObject(key, 'RSA-OAEP-512');
+          let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA1_5' });
+          key = await i(this.provider).keystore.getKeyObject(key, 'RSA1_5');
 
-          const encrypted = await new CompactEncrypt(encoder.encode(signed))
-            .setProtectedHeader({ enc: 'A192CBC-HS384', alg: 'RSA-OAEP-512' })
-            .encrypt(key);
+          const encrypted = jose.JWE.encrypt(signed, key, { enc: 'A192CBC-HS384', alg: 'RSA1_5' });
 
           return this.wrap({
             route,
@@ -339,22 +382,18 @@ describe('encryption', () => {
       });
 
       describe('Pushed Request Object encryption', () => {
-        it('works signed', async function () {
-          const client = await this.provider.Client.find('client');
-          const [hsSecret] = client.symmetricKeyStore.selectForSign({ alg: 'HS256' });
+        it('works with signed by none', async function () {
           const signed = await JWT.sign({
             client_id: 'client',
             response_type: 'code',
             redirect_uri: 'https://client.example.com/cb',
             scope: 'openid',
-          }, await client.symmetricKeyStore.getKeyObject(hsSecret, 'HS256'), 'HS256', { issuer: 'client', audience: this.provider.issuer });
+          }, null, 'none', { issuer: 'client', audience: this.provider.issuer });
 
-          let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA-OAEP' });
-          key = await i(this.provider).keystore.getKeyObject(key, 'RSA-OAEP');
+          let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA1_5' });
+          key = await i(this.provider).keystore.getKeyObject(key, 'RSA1_5');
 
-          const encrypted = await new CompactEncrypt(encoder.encode(signed))
-            .setProtectedHeader({ enc: 'A128CBC-HS256', alg: 'RSA-OAEP' })
-            .encrypt(key);
+          const encrypted = jose.JWE.encrypt(signed, key, { enc: 'A128CBC-HS256', alg: 'RSA1_5' });
 
           const { body } = await this.agent.post('/request')
             .auth('client', 'secret')
@@ -369,7 +408,46 @@ describe('encryption', () => {
               client_id: 'client',
             },
           })
-            .expect(303)
+            .expect(302)
+            .expect((response) => {
+              const expected = url.parse('https://client.example.com/cb', true);
+              const actual = url.parse(response.headers.location, true);
+              ['protocol', 'host', 'pathname'].forEach((attr) => {
+                expect(actual[attr]).to.equal(expected[attr]);
+              });
+              expect(actual.query).to.have.property('code');
+            });
+        });
+
+        it('works with signed by other than none', async function () {
+          const client = await this.provider.Client.find('client');
+          const [hsSecret] = client.symmetricKeyStore.selectForSign({ alg: 'HS256' });
+          const signed = await JWT.sign({
+            client_id: 'client',
+            response_type: 'code',
+            redirect_uri: 'https://client.example.com/cb',
+            scope: 'openid',
+          }, await client.symmetricKeyStore.getKeyObject(hsSecret, 'HS256'), 'HS256', { issuer: 'client', audience: this.provider.issuer });
+
+          let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA1_5' });
+          key = await i(this.provider).keystore.getKeyObject(key, 'RSA1_5');
+
+          const encrypted = jose.JWE.encrypt(signed, key, { enc: 'A128CBC-HS256', alg: 'RSA1_5' });
+
+          const { body } = await this.agent.post('/request')
+            .auth('client', 'secret')
+            .type('form')
+            .send({ request: encrypted });
+
+          return this.wrap({
+            route,
+            verb,
+            auth: {
+              request_uri: body.request_uri,
+              client_id: 'client',
+            },
+          })
+            .expect(302)
             .expect((response) => {
               const expected = url.parse('https://client.example.com/cb', true);
               const actual = url.parse(response.headers.location, true);
@@ -390,12 +468,10 @@ describe('encryption', () => {
             scope: 'openid',
           }, await client.symmetricKeyStore.getKeyObject(hsSecret, 'HS256'), 'HS256', { issuer: 'clientRequestObjectSigningAlg', audience: this.provider.issuer });
 
-          let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA-OAEP' });
-          key = await i(this.provider).keystore.getKeyObject(key, 'RSA-OAEP');
+          let [key] = i(this.provider).keystore.selectForEncrypt({ kty: 'RSA', alg: 'RSA1_5' });
+          key = await i(this.provider).keystore.getKeyObject(key, 'RSA1_5');
 
-          const encrypted = await new CompactEncrypt(encoder.encode(signed))
-            .setProtectedHeader({ enc: 'A128CBC-HS256', alg: 'RSA-OAEP' })
-            .encrypt(key);
+          const encrypted = jose.JWE.encrypt(signed, key, { enc: 'A128CBC-HS256', alg: 'RSA1_5' });
 
           const { body } = await this.agent.post('/request')
             .auth('clientRequestObjectSigningAlg', 'secret')
@@ -410,7 +486,7 @@ describe('encryption', () => {
               client_id: 'clientRequestObjectSigningAlg',
             },
           })
-            .expect(303)
+            .expect(302)
             .expect((response) => {
               const expected = url.parse('https://client.example.com/cb', true);
               const actual = url.parse(response.headers.location, true);
@@ -434,7 +510,7 @@ describe('encryption', () => {
 
         return this.wrap({ route, verb, auth })
           .expect(() => {
-            client.idTokenEncryptedResponseAlg = 'RSA-OAEP';
+            client.idTokenEncryptedResponseAlg = 'RSA1_5';
           })
           .expect(auth.validateFragment)
           .expect((response) => {
@@ -464,18 +540,15 @@ describe('encryption', () => {
           const client = await this.provider.Client.find('clientSymmetric');
           const signed = await JWT.sign({
             client_id: 'clientSymmetric',
-            scope: 'openid',
             response_type: 'id_token',
             nonce: 'foobar',
             redirect_uri: 'https://client.example.com/cb',
-          }, Buffer.from('secret'), 'HS256', { issuer: 'clientSymmetric', audience: this.provider.issuer });
+          }, null, 'none', { issuer: 'clientSymmetric', audience: this.provider.issuer });
 
           let [key] = client.symmetricKeyStore.selectForEncrypt({ alg: 'A128KW' });
           key = await client.symmetricKeyStore.getKeyObject(key, 'A128KW');
 
-          const encrypted = await new CompactEncrypt(encoder.encode(signed))
-            .setProtectedHeader({ enc: 'A128CBC-HS256', alg: 'A128KW' })
-            .encrypt(key);
+          const encrypted = jose.JWE.encrypt(signed, key, { enc: 'A128CBC-HS256', alg: 'A128KW' });
 
           return this.wrap({
             route,
@@ -487,7 +560,7 @@ describe('encryption', () => {
               response_type: 'id_token',
             },
           })
-            .expect(303)
+            .expect(302)
             .expect((response) => {
               const expected = url.parse('https://client.example.com/cb', true);
               const actual = url.parse(response.headers.location.replace('#', '?'), true);
@@ -504,14 +577,12 @@ describe('encryption', () => {
             client_id: 'clientSymmetric-expired',
             response_type: 'id_token',
             nonce: 'foobar',
-          }, Buffer.from('secret'), 'HS256', { issuer: 'clientSymmetric-expired', audience: this.provider.issuer });
+          }, null, 'none', { issuer: 'clientSymmetric-expired', audience: this.provider.issuer });
 
           let [key] = client.symmetricKeyStore.selectForEncrypt({ alg: 'A128KW' });
           key = await client.symmetricKeyStore.getKeyObject(key, 'A128KW');
 
-          const encrypted = await new CompactEncrypt(encoder.encode(signed))
-            .setProtectedHeader({ enc: 'A128CBC-HS256', alg: 'A128KW' })
-            .encrypt(key);
+          const encrypted = jose.JWE.encrypt(signed, key, { enc: 'A128CBC-HS256', alg: 'A128KW' });
 
           return this.wrap({
             route,
@@ -524,7 +595,7 @@ describe('encryption', () => {
               response_type: 'id_token',
             },
           })
-            .expect(303)
+            .expect(302)
             .expect((response) => {
               const { query } = url.parse(response.headers.location.replace('#', '?'), true);
               expect(query).to.have.property('error', 'invalid_request_object');
@@ -532,13 +603,10 @@ describe('encryption', () => {
             });
         });
 
-        it('responds encrypted', function () {
+        it('responds encrypted with i.e. PBES2 password derived key id_token', function () {
           expect(this.id_token).to.be.ok;
           expect(this.id_token.split('.')).to.have.lengthOf(5);
-          const header = decodeProtectedHeader(this.id_token);
-          expect(header).to.have.property('alg', 'A128KW');
-          expect(header).to.have.property('iss').eql(this.provider.issuer);
-          expect(header).to.have.property('aud').eql('clientSymmetric');
+          expect(JSON.parse(base64url.decode(this.id_token.split('.')[0]))).to.have.property('alg', 'PBES2-HS384+A192KW');
         });
       });
 
@@ -562,18 +630,15 @@ describe('encryption', () => {
           const client = await this.provider.Client.find('clientSymmetric');
           const signed = await JWT.sign({
             client_id: 'clientSymmetric-dir',
-            scope: 'openid',
             response_type: 'id_token',
             nonce: 'foobar',
             redirect_uri: 'https://client.example.com/cb',
-          }, Buffer.from('secret'), 'HS256', { issuer: 'clientSymmetric-dir', audience: this.provider.issuer });
+          }, null, 'none', { issuer: 'clientSymmetric-dir', audience: this.provider.issuer });
 
           let [key] = client.symmetricKeyStore.selectForEncrypt({ alg: 'A128CBC-HS256' });
           key = await client.symmetricKeyStore.getKeyObject(key, 'A128CBC-HS256');
 
-          const encrypted = await new CompactEncrypt(encoder.encode(signed))
-            .setProtectedHeader({ enc: 'A128CBC-HS256', alg: 'dir' })
-            .encrypt(key);
+          const encrypted = jose.JWE.encrypt(signed, key, { enc: 'A128CBC-HS256', alg: 'dir' });
 
           return this.wrap({
             route,
@@ -585,7 +650,7 @@ describe('encryption', () => {
               response_type: 'id_token',
             },
           })
-            .expect(303)
+            .expect(302)
             .expect((response) => {
               const expected = url.parse('https://client.example.com/cb', true);
               const actual = url.parse(response.headers.location.replace('#', '?'), true);
@@ -602,14 +667,12 @@ describe('encryption', () => {
             client_id: 'clientSymmetric-expired',
             response_type: 'id_token',
             nonce: 'foobar',
-          }, Buffer.from('secret'), 'HS256', { issuer: 'clientSymmetric-expired', audience: this.provider.issuer });
+          }, null, 'none', { issuer: 'clientSymmetric-expired', audience: this.provider.issuer });
 
           let [key] = client.symmetricKeyStore.selectForEncrypt({ alg: 'A128CBC-HS256' });
           key = await client.symmetricKeyStore.getKeyObject(key, 'A128CBC-HS256');
 
-          const encrypted = await new CompactEncrypt(encoder.encode(signed))
-            .setProtectedHeader({ enc: 'A128CBC-HS256', alg: 'dir' })
-            .encrypt(key);
+          const encrypted = jose.JWE.encrypt(signed, key, { enc: 'A128CBC-HS256', alg: 'dir' });
 
           return this.wrap({
             route,
@@ -622,7 +685,7 @@ describe('encryption', () => {
               response_type: 'id_token',
             },
           })
-            .expect(303)
+            .expect(302)
             .expect((response) => {
               const { query } = url.parse(response.headers.location.replace('#', '?'), true);
               expect(query).to.have.property('error', 'invalid_request_object');
@@ -630,14 +693,12 @@ describe('encryption', () => {
             });
         });
 
-        it('responds encrypted', function () {
+        it('responds encrypted with i.e. PBES2 password derived key id_token', function () {
           expect(this.id_token).to.be.ok;
           expect(this.id_token.split('.')).to.have.lengthOf(5);
-          const header = decodeProtectedHeader(this.id_token);
+          const header = JSON.parse(base64url.decode(this.id_token.split('.')[0]));
           expect(header).to.have.property('alg', 'dir');
           expect(header).to.have.property('enc', 'A128CBC-HS256');
-          expect(header).to.have.property('iss').eql(this.provider.issuer);
-          expect(header).to.have.property('aud').eql('clientSymmetric-dir');
         });
       });
     });

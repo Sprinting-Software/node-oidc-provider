@@ -1,17 +1,16 @@
 /* eslint-disable no-param-reassign */
 
-import { createInterface as readline } from 'node:readline';
-import { inspect } from 'node:util';
-import { createReadStream, writeFileSync, readFileSync } from 'node:fs';
+const { createInterface: readline } = require('readline');
+const { inspect } = require('util');
+const { createReadStream, writeFileSync, readFileSync } = require('fs');
 
-import get from 'lodash/get.js'; // eslint-disable-line import/no-extraneous-dependencies
-import words from 'lodash/words.js'; // eslint-disable-line import/no-extraneous-dependencies
+const get = require('lodash/get'); // eslint-disable-line import/no-extraneous-dependencies
+const words = require('lodash/words'); // eslint-disable-line import/no-extraneous-dependencies
 
-import { defaults } from '../lib/helpers/defaults.js';
-import login from '../lib/helpers/interaction_policy/prompts/login.js';
-import consent from '../lib/helpers/interaction_policy/prompts/consent.js';
+const docs = require('../lib/helpers/docs');
+const values = require('../lib/helpers/defaults')();
 
-for (const [key, value] of Object.entries(defaults.ttl)) {
+for (const [key, value] of Object.entries(values.ttl)) { // eslint-disable-line no-restricted-syntax
   if (['RefreshToken', 'ClientCredentials', 'AccessToken', 'BackchannelAuthenticationRequest'].includes(key)) {
     value[inspect.custom] = () => (
       value.toString()
@@ -32,12 +31,12 @@ for (const [key, value] of Object.entries(defaults.ttl)) {
   }
 }
 
-defaults.interactions.policy[inspect.custom] = () => `[
+values.interactions.policy[inspect.custom] = () => `[
 /* LOGIN PROMPT */
-${login.toString().replace('() => new Prompt', 'new Prompt')}
+${require('../lib/helpers/interaction_policy/prompts/login').toString().replace('() => new Prompt', 'new Prompt')}
 
 /* CONSENT PROMPT */
-${consent.toString().replace('() => new Prompt', 'new Prompt')}
+${require('../lib/helpers/interaction_policy/prompts/consent').toString().replace('() => new Prompt', 'new Prompt')}
 ]`;
 
 function capitalizeSentences(copy) {
@@ -55,6 +54,10 @@ class Block {
 
       if (buffer.indexOf('@indent@') === 0) {
         buffer = buffer.slice(10);
+      }
+
+      if (buffer.indexOf('##DOCS') !== -1) {
+        buffer = Buffer.from(buffer.toString().replace(/##DOCS\/(.+)##/g, () => docs(RegExp.$1)));
       }
 
       if (buffer.indexOf('-') === 0 || /^\d+\./.exec(buffer) || buffer.indexOf('```') !== -1 || buffer.indexOf('|') === 0) {
@@ -84,20 +87,7 @@ const props = [
   '@skip',
 ];
 
-let mid = Buffer.from('');
-
-function append(what) {
-  mid = Buffer.concat([mid, Buffer.from(what)]);
-}
-
-function expand(what) {
-  what = `\`\`\`js\n${what}\n\`\`\`\n`;
-
-  append('\n_**default value**_:\n');
-  return what;
-}
-
-try {
+(async () => {
   const blocks = {};
   await new Promise((resolve, reject) => {
     const read = readline({ input: createReadStream('./lib/helpers/defaults.js') });
@@ -133,15 +123,15 @@ try {
 
       if (nextIsOption) {
         nextIsOption = false;
-        option = blocks[strLine.slice(2)] = new Block(); // eslint-disable-line no-multi-assign
+        option = blocks[strLine.substring(2)] = new Block(); // eslint-disable-line no-multi-assign
         return;
       }
 
       const next = props.find((prop) => {
         if (
           prop.startsWith('@')
-            ? strLine.slice(2, 2 + prop.length) === prop
-            : strLine.slice(2, 2 + prop.length + 1) === `${prop}:`
+            ? strLine.substring(2, 2 + prop.length) === prop
+            : strLine.substring(2, 2 + prop.length + 1) === `${prop}:`
         ) {
           let override;
           if (prop === 'example' && option.example) {
@@ -149,12 +139,6 @@ try {
               .filter((p) => p.startsWith('example'))
               .map((e) => parseInt(e.slice(-1), 10) || 0));
             override = `example${i + 1}`;
-          }
-          if (prop === 'recommendation' && option.recommendation) {
-            const i = Math.max(...Object.keys(option)
-              .filter((p) => p.startsWith('recommendation'))
-              .map((e) => parseInt(e.slice(-1), 10) || 0));
-            override = `recommendation${i + 1}`;
           }
           option.active = override || prop;
           option.write(line.slice(prop.length + 4));
@@ -171,7 +155,7 @@ try {
         return;
       }
 
-      if (option?.active) {
+      if (option && option.active) {
         option.write(line);
       }
     });
@@ -182,6 +166,19 @@ try {
 
     read.on('error', reject);
   });
+
+  let mid = Buffer.from('');
+
+  function append(what) {
+    mid = Buffer.concat([mid, Buffer.from(what)]);
+  }
+
+  function expand(what) {
+    what = `\`\`\`js\n${what}\n\`\`\`\n`;
+
+    append('\n_**default value**_:\n');
+    return what;
+  }
 
   const jwa = [];
   let featuresIdx = 0;
@@ -216,9 +213,7 @@ try {
 
   let hidden;
   let prev;
-  for (const block of [
-    ...adapter, ...clients, ...findAccount, ...jwks, ...features, ...configuration, ...jwa,
-  ]) {
+  for (const block of [...adapter, ...clients, ...findAccount, ...jwks, ...features, ...configuration, ...jwa]) { // eslint-disable-line no-restricted-syntax, max-len
     const section = blocks[block];
 
     if ('@skip' in section) {
@@ -258,12 +253,14 @@ try {
       append(`${capitalizeSentences(section.description.join(' '))}  \n\n`);
     }
 
-    Object.keys(section).filter((x) => x.startsWith('recommendation')).forEach((prop) => {
-      append(`_**recommendation**_: ${section[prop].join(' ')}  \n\n`);
+    ['recommendation'].forEach((option) => {
+      if (section[option]) {
+        append(`_**${option}**_: ${section[option].join(' ')}  \n\n`);
+      }
     });
 
     if (!('@nodefault' in section)) {
-      const value = get(defaults, block);
+      const value = get(values, block);
       switch (typeof value) {
         case 'boolean':
         case 'number':
@@ -334,7 +331,7 @@ try {
 
       const parts = [];
       let incode;
-      for (const line of content) {
+      for (const line of content) { // eslint-disable-line no-restricted-syntax
         const backticks = line.indexOf('```') !== -1;
         if (incode) {
           parts[parts.length - 1].push(line);
@@ -376,7 +373,7 @@ try {
   const post = conf.slice(conf.indexOf(comEnd));
 
   writeFileSync('./docs/README.md', Buffer.concat([pre, mid, post]));
-} catch (err) {
+})().catch((err) => {
   console.error(err); // eslint-disable-line no-console
   process.exitCode = 1;
-}
+});

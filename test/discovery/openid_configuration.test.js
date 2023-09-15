@@ -1,15 +1,13 @@
-import { expect } from 'chai';
-import { createSandbox } from 'sinon';
+const { expect } = require('chai');
+const sinon = require('sinon').createSandbox();
 
-import bootstrap from '../test_helper.js';
-import { InvalidRequest } from '../../lib/helpers/errors.js';
-
-const sinon = createSandbox();
+const bootstrap = require('../test_helper');
+const { InvalidRequest } = require('../../lib/helpers/errors');
 
 const route = '/.well-known/openid-configuration';
 
 describe(route, () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   it('responds with json 200', function () {
     return this.agent.get(route)

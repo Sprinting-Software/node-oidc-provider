@@ -1,17 +1,14 @@
-import sinon from 'sinon';
-import { expect } from 'chai';
+const sinon = require('sinon');
+const { expect } = require('chai');
 
-import bootstrap from '../../test_helper.js';
+const bootstrap = require('../../test_helper');
 
 const route = '/auth';
 const response_type = 'code token';
 const scope = 'openid';
 
 describe('HYBRID code+token', () => {
-  before(bootstrap(import.meta.url));
-  afterEach(function () {
-    this.provider.removeAllListeners();
-  });
+  before(bootstrap(__dirname));
 
   ['get', 'post'].forEach((verb) => {
     describe(`${verb} ${route} with session`, () => {
@@ -24,7 +21,7 @@ describe('HYBRID code+token', () => {
         });
 
         return this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['code', 'state', 'access_token', 'expires_in', 'token_type', 'scope']))
           .expect(auth.validateState)
@@ -38,7 +35,7 @@ describe('HYBRID code+token', () => {
         });
 
         return this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['code', 'state', 'access_token', 'expires_in', 'token_type', 'scope']))
           .expect(auth.validateState)
@@ -70,7 +67,7 @@ describe('HYBRID code+token', () => {
         });
 
         return this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validateClientLocation)
           .expect(() => {
@@ -95,7 +92,7 @@ describe('HYBRID code+token', () => {
         });
 
         await this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['code', 'state', 'access_token', 'expires_in', 'token_type', 'scope']))
           .expect(auth.validateState)
@@ -115,7 +112,7 @@ describe('HYBRID code+token', () => {
         });
 
         return this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(() => {
             expect(spy.calledOnce).to.be.true;
           })

@@ -1,13 +1,11 @@
-import { parse as parseUrl } from 'node:url';
+const { parse: parseUrl } = require('url');
 
-import { createSandbox } from 'sinon';
-import { expect } from 'chai';
-import timekeeper from 'timekeeper';
+const sinon = require('sinon').createSandbox();
+const { expect } = require('chai');
+const timekeeper = require('timekeeper');
 
-import epochTime from '../../lib/helpers/epoch_time.js';
-import bootstrap from '../test_helper.js';
-
-const sinon = createSandbox();
+const epochTime = require('../../lib/helpers/epoch_time');
+const bootstrap = require('../test_helper');
 
 const route = '/token';
 
@@ -16,7 +14,7 @@ function errorDetail(spy) {
 }
 
 describe('grant_type=authorization_code', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   afterEach(() => timekeeper.reset());
 
@@ -38,7 +36,7 @@ describe('grant_type=authorization_code', () => {
           response_type: 'code',
           redirect_uri: 'https://client.example.com/cb',
         })
-        .expect(303)
+        .expect(302)
         .expect((response) => {
           const { query: { code } } = parseUrl(response.headers.location, true);
           const jti = this.getTokenJti(code);
@@ -119,7 +117,8 @@ describe('grant_type=authorization_code', () => {
           grant_type: 'authorization_code',
           redirect_uri: 'https://client.example.com/cb',
         })
-        .expect('cache-control', 'no-store');
+        .expect('pragma', 'no-cache')
+        .expect('cache-control', 'no-cache, no-store');
     });
 
     context('', () => {
@@ -311,7 +310,7 @@ describe('grant_type=authorization_code', () => {
           response_type: 'code',
           redirect_uri: 'https://client.example.com/cb3',
         })
-        .expect(303)
+        .expect(302)
         .expect((response) => {
           const { query: { code } } = parseUrl(response.headers.location, true);
           this.ac = code;
@@ -355,7 +354,7 @@ describe('grant_type=authorization_code', () => {
           scope: 'openid',
           response_type: 'code',
         })
-        .expect(303)
+        .expect(302)
         .expect((response) => {
           const { query: { code } } = parseUrl(response.headers.location, true);
           const jti = this.getTokenJti(code);
@@ -432,7 +431,8 @@ describe('grant_type=authorization_code', () => {
           code: this.ac,
           grant_type: 'authorization_code',
         })
-        .expect('cache-control', 'no-store');
+        .expect('pragma', 'no-cache')
+        .expect('cache-control', 'no-cache, no-store');
     });
 
     context('', () => {

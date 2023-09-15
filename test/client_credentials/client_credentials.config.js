@@ -1,13 +1,12 @@
-import merge from 'lodash/merge.js';
+const cloneDeep = require('lodash/cloneDeep');
+const merge = require('lodash/merge');
 
-import getConfig from '../default.config.js';
-
-const config = getConfig();
+const config = cloneDeep(require('../default.config'));
 
 merge(config.features, { clientCredentials: { enabled: true } });
 config.scopes = ['api:read', 'api:write'];
 
-export default {
+module.exports = {
   config,
   client: {
     client_id: 'client',

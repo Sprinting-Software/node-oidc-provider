@@ -1,17 +1,14 @@
-import sinon from 'sinon';
-import { expect } from 'chai';
+const sinon = require('sinon');
+const { expect } = require('chai');
 
-import bootstrap from '../../test_helper.js';
+const bootstrap = require('../../test_helper');
 
 const route = '/auth';
 const response_type = 'id_token token';
 const scope = 'openid';
 
 describe('IMPLICIT id_token+token', () => {
-  before(bootstrap(import.meta.url));
-  afterEach(function () {
-    this.provider.removeAllListeners();
-  });
+  before(bootstrap(__dirname));
 
   ['get', 'post'].forEach((verb) => {
     describe(`${verb} ${route} with session`, () => {
@@ -24,7 +21,7 @@ describe('IMPLICIT id_token+token', () => {
         });
 
         await this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['id_token', 'state', 'access_token', 'expires_in', 'token_type', 'scope']))
           .expect(auth.validateState)
@@ -40,7 +37,7 @@ describe('IMPLICIT id_token+token', () => {
         });
 
         await this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['id_token', 'state', 'access_token', 'expires_in', 'token_type', 'scope']))
           .expect(auth.validateState)
@@ -73,7 +70,7 @@ describe('IMPLICIT id_token+token', () => {
         this.provider.once('access_token.issued', spy);
 
         return this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['id_token', 'state', 'access_token', 'expires_in', 'token_type', 'scope']))
           .expect(auth.validateState)
@@ -99,7 +96,7 @@ describe('IMPLICIT id_token+token', () => {
         });
 
         await this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['id_token', 'state', 'access_token', 'expires_in', 'token_type', 'scope']))
           .expect(auth.validateState)
@@ -119,7 +116,7 @@ describe('IMPLICIT id_token+token', () => {
         });
 
         return this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(() => {
             expect(spy.calledOnce).to.be.true;
           })
@@ -141,7 +138,7 @@ describe('IMPLICIT id_token+token', () => {
 
         return this.agent.get(route)
           .query(auth)
-          .expect(303)
+          .expect(302)
           .expect(() => {
             expect(spy.calledOnce).to.be.true;
           })

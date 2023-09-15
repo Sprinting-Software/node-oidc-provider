@@ -1,17 +1,17 @@
-import * as querystring from 'node:querystring';
-import * as url from 'node:url';
+const querystring = require('querystring');
+const url = require('url');
 
-import sinon from 'sinon';
-import { expect } from 'chai';
+const sinon = require('sinon');
+const { expect } = require('chai');
 
-import bootstrap from '../../test_helper.js';
+const bootstrap = require('../../test_helper');
 
 const route = '/auth';
 const response_type = 'id_token';
 const scope = 'openid';
 
 describe('IMPLICIT id_token', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   ['get', 'post'].forEach((verb) => {
     describe(`IMPLICIT id_token ${verb} ${route} with session`, () => {
@@ -24,7 +24,7 @@ describe('IMPLICIT id_token', () => {
         });
 
         return this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['id_token', 'state']))
           .expect(auth.validateState)
@@ -51,7 +51,7 @@ describe('IMPLICIT id_token', () => {
         });
 
         return this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['id_token', 'state']))
           .expect(auth.validateState)
@@ -72,7 +72,7 @@ describe('IMPLICIT id_token', () => {
         });
 
         return this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(() => {
             expect(spy.calledOnce).to.be.true;
           })
@@ -96,7 +96,7 @@ describe('IMPLICIT id_token', () => {
 
         let idTokenHint;
         await this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['id_token', 'state']))
           .expect((response) => {
@@ -116,7 +116,7 @@ describe('IMPLICIT id_token', () => {
         });
 
         return this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(() => {
             expect(spy.calledOnce).to.be.true;
           })
@@ -138,7 +138,7 @@ describe('IMPLICIT id_token', () => {
         });
 
         return this.wrap({ route, verb, auth })
-          .expect(303)
+          .expect(302)
           .expect(() => {
             expect(spy.calledOnce).to.be.true;
           })
@@ -174,7 +174,7 @@ describe('IMPLICIT id_token', () => {
           }
         })(querystring.stringify(auth));
 
-        return wrapped.expect(303)
+        return wrapped.expect(302)
           .expect(() => {
             expect(spy.calledOnce).to.be.true;
           })
@@ -196,7 +196,7 @@ describe('IMPLICIT id_token', () => {
 
         return this.agent.get(route)
           .query(auth)
-          .expect(303)
+          .expect(302)
           .expect(() => {
             expect(spy.calledOnce).to.be.true;
           })

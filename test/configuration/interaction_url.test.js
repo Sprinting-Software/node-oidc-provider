@@ -1,6 +1,6 @@
-import { expect } from 'chai';
+const { expect } = require('chai');
 
-import Provider from '../../lib/index.js';
+const { Provider } = require('../../lib');
 
 describe('pathFor related behaviors', () => {
   it('throws an Error when invalid route path is requested', () => {

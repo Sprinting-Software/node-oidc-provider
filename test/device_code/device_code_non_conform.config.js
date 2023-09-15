@@ -1,9 +1,7 @@
-import cloneDeep from 'lodash/cloneDeep.js';
+const cloneDeep = require('lodash/cloneDeep');
 
-import config from './device_code.config.js';
+const config = cloneDeep(require('./device_code.config'));
 
-const setup = cloneDeep(config);
+config.config.conformIdTokenClaims = false;
 
-setup.config.conformIdTokenClaims = false;
-
-export default setup;
+module.exports = config;

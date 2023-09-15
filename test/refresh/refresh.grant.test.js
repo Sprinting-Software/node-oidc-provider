@@ -1,12 +1,12 @@
-import { strict as assert } from 'node:assert';
-import { parse as parseUrl } from 'node:url';
+const { strict: assert } = require('assert');
+const { parse: parseUrl } = require('url');
 
-import sinon from 'sinon';
-import base64url from 'base64url';
-import { expect } from 'chai';
-import timekeeper from 'timekeeper';
+const sinon = require('sinon');
+const base64url = require('base64url');
+const { expect } = require('chai');
+const timekeeper = require('timekeeper');
 
-import bootstrap, { skipConsent } from '../test_helper.js';
+const bootstrap = require('../test_helper');
 
 const route = '/token';
 
@@ -15,16 +15,13 @@ function errorDetail(spy) {
 }
 
 describe('grant_type=refresh_token', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   afterEach(() => timekeeper.reset());
-  afterEach(function () {
-    this.provider.removeAllListeners();
-  });
 
   beforeEach(function () { return this.login({ scope: 'openid email offline_access' }); });
   afterEach(function () { return this.logout(); });
-  skipConsent();
+  bootstrap.skipConsent();
 
   beforeEach(function (done) {
     this.agent.get('/auth')
@@ -36,7 +33,7 @@ describe('grant_type=refresh_token', () => {
         redirect_uri: 'https://client.example.com/cb',
         nonce: 'foobarnonce',
       })
-      .expect(303)
+      .expect(302)
       .end((err, authResponse) => {
         if (err) {
           return done(err);

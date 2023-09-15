@@ -1,37 +1,34 @@
 /* eslint-disable no-console */
 
-import { promisify } from 'node:util';
-import * as path from 'node:path';
-import * as crypto from 'node:crypto';
+const { promisify } = require('util');
+const path = require('path');
+const crypto = require('crypto');
 
-import { dirname } from 'desm';
-import render from '@koa/ejs';
-import helmet from 'helmet';
+const render = require('koa-ejs');
+const helmet = require('helmet');
 
-import Provider from '../../lib/index.js'; // from 'oidc-provider';
-import Account from '../../example/support/account.js';
-import routes from '../../example/routes/koa.js';
+const { Provider } = require('../lib'); // require('oidc-provider');
+const Account = require('../example/support/account');
+const routes = require('../example/routes/koa');
 
-import configuration from './configuration.js';
-
-const __dirname = dirname(import.meta.url);
+const configuration = require('./configuration');
 
 const { GOOGLE_CLIENT_ID, PORT = 3000, ISSUER = `http://localhost:${PORT}` } = process.env;
 configuration.findAccount = Account.findAccount;
 
 let server;
 
-try {
+(async () => {
   let adapter;
   if (process.env.MONGODB_URI) {
-    ({ default: adapter } = await import('./heroku_mongo_adapter.js'));
+    adapter = require('./heroku_mongo_adapter'); // eslint-disable-line global-require
     await adapter.connect();
   }
 
   const provider = new Provider(ISSUER, { adapter, ...configuration });
 
   if (GOOGLE_CLIENT_ID) {
-    const openid = await import('openid-client'); // eslint-disable-line import/no-unresolved
+    const openid = require('openid-client'); // eslint-disable-line global-require, import/no-unresolved
     const google = await openid.Issuer.discover('https://accounts.google.com/.well-known/openid-configuration');
     const googleClient = new google.Client({
       client_id: GOOGLE_CLIENT_ID,
@@ -57,13 +54,12 @@ try {
     return interactionFinished.call(provider, ...args);
   };
 
-  const directives = helmet.contentSecurityPolicy.getDefaultDirectives();
-  delete directives['form-action'];
-  directives['script-src'] = ["'self'", (req, res) => `'nonce-${res.locals.cspNonce}'`];
   const pHelmet = promisify(helmet({
     contentSecurityPolicy: {
-      useDefaults: false,
-      directives,
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        'script-src': ["'self'", (req, res) => `'nonce-${res.locals.cspNonce}'`],
+      },
     },
   }));
 
@@ -71,7 +67,7 @@ try {
     const origSecure = ctx.req.secure;
     ctx.req.secure = ctx.request.secure;
     // eslint-disable-next-line no-unused-expressions
-    ctx.res.locals ||= {};
+    ctx.res.locals || (ctx.res.locals = {});
     ctx.res.locals.cspNonce = crypto.randomBytes(16).toString('base64');
     await pHelmet(ctx.req, ctx.res);
     ctx.req.secure = origSecure;
@@ -96,7 +92,7 @@ try {
       if (ctx.secure) {
         await next();
 
-        switch (ctx.oidc?.route) {
+        switch (ctx.oidc && ctx.oidc.route) {
           case 'discovery': {
             ctx.body.mtls_endpoint_aliases = {};
             ['token', 'introspection', 'revocation', 'userinfo', 'device_authorization', 'pushed_authorization_request'].forEach((endpoint) => {
@@ -109,7 +105,7 @@ try {
             break;
           }
           case 'device_authorization': {
-            if (ctx.status === 200) {
+            if (ctx.stats === 200) {
               ctx.body.verification_uri = ctx.body.verification_uri.replace('https://mtls.', 'https://');
               ctx.body.verification_uri_complete = ctx.body.verification_uri_complete.replace('https://mtls.', 'https://');
             }
@@ -118,7 +114,6 @@ try {
           default:
         }
       } else if (ctx.method === 'GET' || ctx.method === 'HEAD') {
-        ctx.status = 303;
         ctx.redirect(ctx.href.replace(/^http:\/\//i, 'https://'));
       } else {
         ctx.body = {
@@ -134,7 +129,7 @@ try {
     cache: false,
     viewExt: 'ejs',
     layout: '_layout',
-    root: path.join(__dirname, '..', '..', 'example', 'views'),
+    root: path.join(__dirname, '..', 'example', 'views'),
   });
   provider.use(routes(provider).routes());
   server = provider.listen(PORT, () => {
@@ -143,8 +138,8 @@ try {
       process.exit(0);
     });
   });
-} catch (err) {
-  if (server?.listening) server.close();
+})().catch((err) => {
+  if (server && server.listening) server.close();
   console.error(err);
   process.exitCode = 1;
-}
+});

@@ -1,29 +1,25 @@
 /* eslint-disable no-console */
 
-import * as path from 'node:path';
-import { promisify } from 'node:util';
+const path = require('path');
 
-import { dirname } from 'desm';
-import render from '@koa/ejs';
-import helmet from 'helmet';
+const render = require('koa-ejs');
+const helmet = require('koa-helmet'); // eslint-disable-line import/no-unresolved
 
-import Provider from '../lib/index.js'; // from 'oidc-provider';
+const { Provider } = require('../lib'); // require('oidc-provider');
 
-import Account from './support/account.js';
-import configuration from './support/configuration.js';
-import routes from './routes/koa.js';
-
-const __dirname = dirname(import.meta.url);
+const Account = require('./support/account');
+const configuration = require('./support/configuration');
+const routes = require('./routes/koa');
 
 const { PORT = 3000, ISSUER = `http://localhost:${PORT}` } = process.env;
 configuration.findAccount = Account.findAccount;
 
 let server;
 
-try {
+(async () => {
   let adapter;
   if (process.env.MONGODB_URI) {
-    ({ default: adapter } = await import('./adapters/mongodb.js'));
+    adapter = require('./adapters/mongodb'); // eslint-disable-line global-require
     await adapter.connect();
   }
 
@@ -31,22 +27,7 @@ try {
 
   const provider = new Provider(ISSUER, { adapter, ...configuration });
 
-  const directives = helmet.contentSecurityPolicy.getDefaultDirectives();
-  delete directives['form-action'];
-  const pHelmet = promisify(helmet({
-    contentSecurityPolicy: {
-      useDefaults: false,
-      directives,
-    },
-  }));
-
-  provider.use(async (ctx, next) => {
-    const origSecure = ctx.req.secure;
-    ctx.req.secure = ctx.request.secure;
-    await pHelmet(ctx.req, ctx.res);
-    ctx.req.secure = origSecure;
-    return next();
-  });
+  provider.use(helmet());
 
   if (prod) {
     provider.proxy = true;
@@ -54,7 +35,6 @@ try {
       if (ctx.secure) {
         await next();
       } else if (ctx.method === 'GET' || ctx.method === 'HEAD') {
-        ctx.status = 303;
         ctx.redirect(ctx.href.replace(/^http:\/\//i, 'https://'));
       } else {
         ctx.body = {
@@ -75,8 +55,8 @@ try {
   server = provider.listen(PORT, () => {
     console.log(`application is listening on port ${PORT}, check its /.well-known/openid-configuration`);
   });
-} catch (err) {
-  if (server?.listening) server.close();
+})().catch((err) => {
+  if (server && server.listening) server.close();
   console.error(err);
   process.exitCode = 1;
-}
+});

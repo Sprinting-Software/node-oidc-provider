@@ -1,8 +1,6 @@
-import getConfig from '../default.config.js';
+const config = require('../default.config');
 
-const config = getConfig();
-
-export default {
+module.exports = {
   config,
   clients: [{
     client_id: 'client',

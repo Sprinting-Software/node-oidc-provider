@@ -1,10 +1,10 @@
-import { expect } from 'chai';
-import sinon from 'sinon';
+const { expect } = require('chai');
+const sinon = require('sinon');
 
-import bootstrap from '../test_helper.js';
+const bootstrap = require('../test_helper');
 
 describe('custom response modes', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   before(function () { return this.login(); });
 
@@ -29,7 +29,7 @@ describe('custom response modes', () => {
       .expect(() => {
         expect(spy.calledOnce).to.be.true;
         expect(spy.firstCall.args[1]).to.equal('https://client.example.com/cb');
-        expect(spy.firstCall.args[2]).to.have.keys('code', 'state', 'iss');
+        expect(spy.firstCall.args[2]).to.have.keys('code', 'state');
       });
   });
 
@@ -49,7 +49,7 @@ describe('custom response modes', () => {
       .expect(() => {
         expect(spy.calledOnce).to.be.true;
         expect(spy.firstCall.args[1]).to.equal('https://client.example.com/cb');
-        expect(spy.firstCall.args[2]).to.have.keys('error', 'error_description', 'state', 'iss');
+        expect(spy.firstCall.args[2]).to.have.keys('error', 'error_description', 'state');
       });
   });
 

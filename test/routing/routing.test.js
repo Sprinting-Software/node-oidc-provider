@@ -1,8 +1,8 @@
-import bootstrap from '../test_helper.js';
+const bootstrap = require('../test_helper');
 
 describe('default routing behavior', () => {
   describe('without mounting', () => {
-    before(bootstrap(import.meta.url));
+    before(bootstrap(__dirname));
 
     it('handles unhandled verbs to known routes', function () {
       return this.agent.post('/.well-known/openid-configuration')

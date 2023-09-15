@@ -1,7 +1,7 @@
-import getConfig from '../default.config.js';
+const cloneDeep = require('lodash/cloneDeep');
 
-const config = getConfig();
+const config = cloneDeep(require('../default.config'));
 
-export default {
+module.exports = {
   config,
 };

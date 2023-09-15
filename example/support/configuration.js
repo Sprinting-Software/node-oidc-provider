@@ -1,4 +1,4 @@
-export default {
+module.exports = {
   clients: [
     // {
     //   client_id: 'oidcCLIENT',

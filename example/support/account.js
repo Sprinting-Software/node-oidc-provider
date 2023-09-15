@@ -1,7 +1,6 @@
-import { nanoid } from 'nanoid';
-
 const store = new Map();
 const logins = new Map();
+const { nanoid } = require('nanoid');
 
 class Account {
   constructor(id, profile) {
@@ -88,4 +87,4 @@ class Account {
   }
 }
 
-export default Account;
+module.exports = Account;

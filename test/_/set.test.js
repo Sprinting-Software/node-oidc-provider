@@ -1,6 +1,6 @@
-import { expect } from 'chai';
+const { expect } = require('chai');
 
-import set from '../../lib/helpers/_/set.js';
+const set = require('../../lib/helpers/_/set');
 
 describe('set', () => {
   it('sets properties by a dot notation', () => {

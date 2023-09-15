@@ -1,15 +1,13 @@
-import { strict as assert } from 'node:assert';
+const { strict: assert } = require('assert');
 
-import { createSandbox } from 'sinon';
-import { expect } from 'chai';
-import timekeeper from 'timekeeper';
+const sinon = require('sinon').createSandbox();
+const { expect } = require('chai');
+const timekeeper = require('timekeeper');
 
-import bootstrap from '../test_helper.js';
-
-const sinon = createSandbox();
+const bootstrap = require('../test_helper');
 
 describe('BaseToken', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   beforeEach(function () {
     this.adapter = this.TestAdapter.for('RefreshToken');
@@ -43,8 +41,8 @@ describe('BaseToken', () => {
   });
 
   it('handles invalid inputs', async function () {
-    for (const input of [true, Boolean, 1, Infinity, {}, [], new Set()]) {
-      const result = await this.provider.RefreshToken.find(input); // eslint-disable-line no-await-in-loop
+    for (const input of [true, Boolean, 1, Infinity, {}, [], new Set()]) { // eslint-disable-line no-restricted-syntax, max-len
+      const result = await this.provider.RefreshToken.find(input); // eslint-disable-line no-await-in-loop, max-len
       expect(result).to.be.undefined;
     }
   });

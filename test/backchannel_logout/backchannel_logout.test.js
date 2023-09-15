@@ -1,17 +1,15 @@
-import { strict as assert } from 'node:assert';
-import { parse as parseUrl } from 'node:url';
+const { strict: assert } = require('assert');
+const { parse: parseUrl } = require('url');
 
-import { createSandbox } from 'sinon';
-import { expect } from 'chai';
-import base64url from 'base64url';
-import nock from 'nock';
+const sinon = require('sinon').createSandbox();
+const { expect } = require('chai');
+const base64url = require('base64url');
+const nock = require('nock');
 
-import bootstrap, { skipConsent } from '../test_helper.js';
-
-const sinon = createSandbox();
+const bootstrap = require('../test_helper');
 
 describe('Back-Channel Logout 1.0', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   afterEach(nock.cleanAll);
   afterEach(sinon.restore);
@@ -23,8 +21,6 @@ describe('Back-Channel Logout 1.0', () => {
       nock('https://client.example.com/')
         .filteringRequestBody((body) => {
           expect(body).to.match(/^logout_token=(([\w-]+\.?){3})$/);
-          const header = JSON.parse(base64url.decode(RegExp.$1.split('.')[0]));
-          expect(header).to.have.property('typ', 'logout+jwt');
           const decoded = JSON.parse(base64url.decode(RegExp.$1.split('.')[1]));
           expect(decoded).to.have.all.keys('sub', 'events', 'iat', 'aud', 'iss', 'jti', 'sid');
           expect(decoded).to.have.property('events').and.eql({ 'http://schemas.openid.net/event/backchannel-logout': {} });
@@ -85,7 +81,7 @@ describe('Back-Channel Logout 1.0', () => {
     beforeEach(function () { return this.login({ scope: 'openid offline_access' }); });
     afterEach(function () { return this.logout(); });
 
-    skipConsent();
+    bootstrap.skipConsent();
 
     beforeEach(function () {
       return this.agent.get('/auth')
@@ -97,7 +93,7 @@ describe('Back-Channel Logout 1.0', () => {
           response_type: 'code id_token',
           redirect_uri: 'https://client.example.com/cb',
         })
-        .expect(303)
+        .expect(302)
         .expect((response) => {
           const { query } = parseUrl(response.headers.location.replace('#', '?'), true);
           expect(query).to.have.property('code');
@@ -180,7 +176,7 @@ describe('Back-Channel Logout 1.0', () => {
       return this.agent.post('/session/end/confirm')
         .send(params)
         .type('form')
-        .expect(303)
+        .expect(302)
         .expect(() => {
           (() => {
             const { sid } = session.authorizations.client;
@@ -215,7 +211,7 @@ describe('Back-Channel Logout 1.0', () => {
       return this.agent.post('/session/end/confirm')
         .send(params)
         .type('form')
-        .expect(303)
+        .expect(302)
         .expect(() => {
           expect(client.backchannelLogout.called).to.be.true;
           expect(client.backchannelLogout.calledWith(accountId, sid)).to.be.true;
@@ -238,7 +234,7 @@ describe('Back-Channel Logout 1.0', () => {
       return this.agent.post('/session/end/confirm')
         .send(params)
         .type('form')
-        .expect(303)
+        .expect(302)
         .expect(() => {
           expect(client.backchannelLogout.called).to.be.false;
           client.backchannelLogout.restore();

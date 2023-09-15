@@ -1,35 +1,32 @@
 /* eslint-disable no-underscore-dangle */
 
-import { parse, pathToFileURL } from 'node:url';
-import * as path from 'node:path';
-import * as querystring from 'node:querystring';
-import { createServer } from 'node:http';
-import { once } from 'node:events';
-
-import sinon from 'sinon';
-import { dirname } from 'desm';
-import flatten from 'lodash/flatten.js';
-import { agent as supertest } from 'supertest';
-import { expect } from 'chai';
-import koaMount from 'koa-mount';
-import base64url from 'base64url';
-import KeyGrip from 'keygrip'; // eslint-disable-line import/no-extraneous-dependencies
-import { CookieAccessInfo } from 'cookiejar'; // eslint-disable-line import/no-extraneous-dependencies
-import Connect from 'connect';
-import Express from 'express';
-import Koa from 'koa';
-
-import nanoid from '../lib/helpers/nanoid.js';
-import epochTime from '../lib/helpers/epoch_time.js';
-import Provider from '../lib/index.js';
-import instance from '../lib/helpers/weak_cache.js';
-
-import { Account, TestAdapter } from './models.js';
-import keys from './keys.js';
-
 process.env.NODE_ENV = process.env.NODE_ENV || 'test';
 
-global.i = instance;
+const { parse } = require('url');
+const path = require('path');
+const querystring = require('querystring');
+const { createServer } = require('http');
+
+const sinon = require('sinon');
+const flatten = require('lodash/flatten');
+const { agent: supertest } = require('supertest');
+const { expect } = require('chai');
+const koaMount = require('koa-mount');
+const base64url = require('base64url');
+const KeyGrip = require('keygrip'); // eslint-disable-line import/no-extraneous-dependencies
+const Connect = require('connect');
+const Express = require('express');
+const Fastify = require('fastify');
+const middie = require('middie');
+const Koa = require('koa');
+
+const nanoid = require('../lib/helpers/nanoid');
+const epochTime = require('../lib/helpers/epoch_time');
+const { Provider } = require('../lib');
+
+const { Account, TestAdapter } = require('./models');
+
+global.i = require('../lib/helpers/weak_cache');
 
 Object.defineProperties(Provider.prototype, {
   enable: {
@@ -64,15 +61,12 @@ const { port } = global.server.address();
 
 const jwt = (token) => JSON.parse(base64url.decode(token.split('.')[1])).jti;
 
-export default function testHelper(importMetaUrl, {
-  config: base,
+module.exports = function testHelper(dir, {
+  config: base = path.basename(dir),
   protocol = 'http:',
   mountVia = process.env.MOUNT_VIA,
   mountTo = mountVia ? process.env.MOUNT_TO || '/' : '/',
 } = {}) {
-  const dir = dirname(importMetaUrl);
-  // eslint-disable-next-line no-param-reassign
-  base ??= path.basename(dir);
   const afterPromises = [];
 
   after(async () => {
@@ -82,10 +76,8 @@ export default function testHelper(importMetaUrl, {
   });
 
   return async function () {
-    const conf = pathToFileURL(path.format({ dir, base: `${base}.config.js` })).toString();
-    const { default: mod } = await import(conf);
-    const { config, client } = mod;
-    let { clients } = mod;
+    const conf = path.format({ dir, base: `${base}.config.js` });
+    let { config, client, clients } = require(conf); // eslint-disable-line
 
     if (client && !clients) {
       clients = [client];
@@ -99,7 +91,7 @@ export default function testHelper(importMetaUrl, {
 
     const provider = new Provider(issuerIdentifier, {
       clients,
-      jwks: { keys },
+      jwks: global.keystore.toJWKS(true),
       adapter: TestAdapter,
       ...config,
     });
@@ -116,10 +108,7 @@ export default function testHelper(importMetaUrl, {
         `_session.legacy.sig=; path=/; expires=${expire.toGMTString()}; httponly`,
       ];
 
-      return agent._saveCookies.bind(agent)({
-        request: { url: provider.issuer },
-        headers: { 'set-cookie': cookies },
-      });
+      return agent._saveCookies.bind(agent)({ headers: { 'set-cookie': cookies } });
     }
 
     async function login({
@@ -136,14 +125,14 @@ export default function testHelper(importMetaUrl, {
       expire.setDate(expire.getDate() + 1);
       this.loggedInAccountId = accountId;
 
-      const keyGrip = new KeyGrip(i(provider).configuration('cookies.keys'));
+      const keys = new KeyGrip(i(provider).configuration('cookies.keys'));
       const session = new (provider.Session)({ jti: sessionId, loginTs, accountId });
       lastSession = session;
       const sessionCookie = `_session=${sessionId}; path=/; expires=${expire.toGMTString()}; httponly`;
       const cookies = [sessionCookie];
 
       const [pre, ...post] = sessionCookie.split(';');
-      cookies.push([`_session.sig=${keyGrip.sign(pre)}`, ...post].join(';'));
+      cookies.push([`_session.sig=${keys.sign(pre)}`, ...post].join(';'));
 
       session.authorizations = {};
       const ctx = new provider.OIDCContext({ req: { socket: {} }, res: {} });
@@ -153,6 +142,7 @@ export default function testHelper(importMetaUrl, {
         ctx.params.claims = JSON.stringify(ctx.params.claims);
       }
 
+      // eslint-disable-next-line no-restricted-syntax
       for (const cl of clients) {
         const grant = new provider.Grant({ clientId: cl.client_id, accountId });
         grant.addOIDCScope(scope);
@@ -166,7 +156,7 @@ export default function testHelper(importMetaUrl, {
         if (rejectedClaims.length) {
           grant.rejectOIDCClaims(rejectedClaims);
         }
-
+        // eslint-disable-next-line no-restricted-syntax
         for (const [key, value] of Object.entries(resources)) {
           grant.addResourceScope(key, value);
         }
@@ -185,17 +175,14 @@ export default function testHelper(importMetaUrl, {
       }
 
       return Account.findAccount({}, accountId).then(session.save(ttl)).then(() => {
-        agent._saveCookies.bind(agent)({
-          request: { url: provider.issuer },
-          headers: { 'set-cookie': cookies },
-        });
+        agent._saveCookies.bind(agent)({ headers: { 'set-cookie': cookies } });
       });
     }
 
     class AuthorizationRequest {
       constructor(parameters = {}) {
         if (parameters.claims && typeof parameters.claims !== 'string') {
-          parameters.claims = JSON.stringify(parameters.claims); // eslint-disable-line no-param-reassign
+          parameters.claims = JSON.stringify(parameters.claims); // eslint-disable-line no-param-reassign, max-len
         }
 
         Object.assign(this, parameters);
@@ -235,13 +222,6 @@ export default function testHelper(importMetaUrl, {
           },
         });
 
-        Object.defineProperty(this, 'validateIss', {
-          value: (response) => {
-            const { query: { iss } } = parse(response.headers.location, true);
-            expect(iss).to.equal(issuerIdentifier);
-          },
-        });
-
         Object.defineProperty(this, 'validateInteractionRedirect', {
           value: (response) => {
             const { hostname, search, query } = parse(response.headers.location);
@@ -271,7 +251,7 @@ export default function testHelper(importMetaUrl, {
       }
     }
 
-    AuthorizationRequest.prototype.validateInteraction = (eName, ...eReasons) => { // eslint-disable-line arrow-body-style
+    AuthorizationRequest.prototype.validateInteraction = (eName, ...eReasons) => { // eslint-disable-line arrow-body-style, max-len
       return (response) => {
         const uid = readCookie(response.headers['set-cookie'][0]);
         const { prompt: { name, reasons } } = TestAdapter.for('Interaction').syncFind(uid);
@@ -286,7 +266,7 @@ export default function testHelper(importMetaUrl, {
       response.headers.location = response.headers.location.replace('#', '?'); // eslint-disable-line no-param-reassign
     };
 
-    AuthorizationRequest.prototype.validatePresence = function (properties, all) {
+    AuthorizationRequest.prototype.validatePresence = function (keys, all) {
       let absolute;
       if (all === undefined) {
         absolute = true;
@@ -294,17 +274,14 @@ export default function testHelper(importMetaUrl, {
         absolute = all;
       }
 
-      // eslint-disable-next-line no-param-reassign
-      properties = (!absolute || properties.includes('id_token') || properties.includes('response')) ? properties : [...new Set(properties.concat('iss'))];
-
       return (response) => {
         const { query } = parse(response.headers.location, true);
         if (absolute) {
-          expect(query).to.have.keys(properties);
+          expect(query).to.have.keys(keys);
         } else {
-          expect(query).to.contain.keys(properties);
+          expect(query).to.contain.keys(keys);
         }
-        properties.forEach((key) => {
+        keys.forEach((key) => {
           this.res[key] = query[key];
         });
       };
@@ -337,13 +314,8 @@ export default function testHelper(importMetaUrl, {
       return lastSession;
     }
 
-    function getSessionId() {
-      const { value: sessionId } = agent.jar.getCookie('_session', CookieAccessInfo.All) || {};
-      return sessionId;
-    }
-
     function getSession({ instantiate } = { instantiate: false }) {
-      const sessionId = getSessionId();
+      const { value: sessionId } = agent.jar.getCookie('_session', { path: '/' });
       const raw = TestAdapter.for('Session').syncFind(sessionId);
 
       if (instantiate) {
@@ -351,6 +323,11 @@ export default function testHelper(importMetaUrl, {
       }
 
       return raw;
+    }
+
+    function getSessionId() {
+      const { value: sessionId } = agent.jar.getCookie('_session', { path: '/' }) || {};
+      return sessionId;
     }
 
     function getGrantId(client_id) {
@@ -471,23 +448,21 @@ export default function testHelper(importMetaUrl, {
         break;
       }
       case 'fastify': {
-        const { default: Fastify } = await import('fastify');
-        const { default: middie } = await import('@fastify/middie');
         const app = new Fastify();
         await app.register(middie);
         app.use(mountTo, provider.callback());
-        await new Promise((resolve) => { global.server.close(resolve); });
-        await app.listen({ port, host: '::' });
+        await new Promise((resolve) => global.server.close(resolve));
+        await app.listen(port);
         global.server = app.server;
         afterPromises.push(async () => {
           await app.close();
-          global.server = createServer().listen(port, '::');
-          await once(global.server, 'listening');
+          global.server = createServer().listen(port);
+          await new Promise((resolve) => global.server.once('listening', resolve));
         });
         break;
       }
       case 'hapi': {
-        const { default: Hapi } = await import('@hapi/hapi');
+        const Hapi = require('@hapi/hapi'); // eslint-disable-line global-require
         const app = new Hapi.Server({ port });
         const callback = provider.callback();
         app.route({
@@ -498,8 +473,10 @@ export default function testHelper(importMetaUrl, {
             req.originalUrl = req.url;
             req.url = req.url.replace(mountTo, '');
 
-            callback(req, res);
-            await once(res, 'finish');
+            await new Promise((resolve) => {
+              res.on('finish', resolve);
+              callback(req, res);
+            });
 
             req.url = req.url.replace('/', mountTo);
             delete req.originalUrl;
@@ -507,13 +484,13 @@ export default function testHelper(importMetaUrl, {
             return res.finished ? h.abandon : h.continue;
           },
         });
-        await new Promise((resolve) => { global.server.close(resolve); });
+        await new Promise((resolve) => global.server.close(resolve));
         await app.start();
         global.server = app.listener;
         afterPromises.push(async () => {
           await app.stop();
-          global.server = createServer().listen(port, '::');
-          await once(global.server, 'listening');
+          global.server = createServer().listen(port);
+          await new Promise((resolve) => global.server.once('listening', resolve));
         });
         break;
       }
@@ -545,9 +522,9 @@ export default function testHelper(importMetaUrl, {
 
     this.agent = agent;
   };
-}
+};
 
-export function passInteractionChecks(...reasons) {
+module.exports.passInteractionChecks = (...reasons) => {
   const cb = reasons.pop();
 
   const sandbox = sinon.createSandbox();
@@ -569,9 +546,9 @@ export function passInteractionChecks(...reasons) {
 
     cb();
   });
-}
+};
 
-export function skipConsent() {
+module.exports.skipConsent = () => {
   const sandbox = sinon.createSandbox();
 
   before(function () {
@@ -579,4 +556,4 @@ export function skipConsent() {
   });
 
   after(sandbox.restore);
-}
+};

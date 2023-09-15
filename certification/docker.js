@@ -1,24 +1,21 @@
 /* eslint-disable no-console */
 
-import * as path from 'node:path';
-import * as https from 'node:https';
+const path = require('path');
+const https = require('https');
 
-import { generate } from 'selfsigned';
-import render from '@koa/ejs';
-import { dirname } from 'desm';
+const pem = require('https-pem');
+const render = require('koa-ejs');
 
-import Provider from '../../lib/index.js'; // from 'oidc-provider';
-import Account from '../../example/support/account.js';
-import routes from '../../example/routes/koa.js';
+const { Provider } = require('../lib'); // require('oidc-provider');
+const Account = require('../example/support/account');
+const routes = require('../example/routes/koa');
 
-import configuration from './configuration.js';
+const configuration = require('./configuration');
 
-const selfsigned = generate();
 const { PORT = 3000, ISSUER = `http://localhost:${PORT}` } = process.env;
 configuration.findAccount = Account.findAccount;
 
 const provider = new Provider(ISSUER, configuration);
-const __dirname = dirname(import.meta.url);
 
 // don't wanna re-bundle the interactions so just insert the login amr and acr as static whenever
 // login is submitted, usually you would submit them from your interaction
@@ -39,13 +36,10 @@ render(provider.app, {
   cache: false,
   viewExt: 'ejs',
   layout: '_layout',
-  root: path.join(__dirname, '..', '..', 'example', 'views'),
+  root: path.join(__dirname, '..', 'example', 'views'),
 });
 provider.use(routes(provider).routes());
-const server = https.createServer({
-  key: selfsigned.private,
-  cert: selfsigned.cert,
-}, provider.callback());
+const server = https.createServer(pem, provider.callback());
 server.listen(PORT, () => {
   console.log(`application is listening on port ${PORT}, check its /.well-known/openid-configuration`);
   process.on('SIGINT', () => {

@@ -1,17 +1,16 @@
-import merge from 'lodash/merge.js';
+const cloneDeep = require('lodash/cloneDeep');
+const merge = require('lodash/merge');
 
-import getConfig from '../default.config.js';
-
-const config = getConfig();
+const config = cloneDeep(require('../default.config'));
 
 merge(config.features, { webMessageResponseMode: { enabled: true } });
 
-export default {
+module.exports = {
   config,
   client: {
     client_id: 'client',
-    grant_types: ['implicit', 'authorization_code'],
-    response_types: ['code id_token token', 'code'],
+    grant_types: ['implicit'],
+    response_types: ['id_token token'],
     redirect_uris: ['https://client.example.com'],
     web_message_uris: ['https://auth.example.com'],
     token_endpoint_auth_method: 'none',

@@ -8,7 +8,7 @@
 */
 
 // npm i sequelize@^5.21.2
-import Sequelize from 'sequelize'; // eslint-disable-line import/no-unresolved
+const Sequelize = require('sequelize'); // eslint-disable-line import/no-unresolved
 
 const sequelize = new Sequelize('databaseName', 'username', 'password', {
   host: 'databaseHost',
@@ -20,7 +20,6 @@ const grantable = new Set([
   'AuthorizationCode',
   'RefreshToken',
   'DeviceCode',
-  'BackchannelAuthenticationRequest',
 ]);
 
 const models = [
@@ -37,7 +36,6 @@ const models = [
   'ReplayDetection',
   'PushedAuthorizationRequest',
   'Grant',
-  'BackchannelAuthenticationRequest',
 ].reduce((map, name) => {
   map.set(name, sequelize.define(name, {
     id: { type: Sequelize.STRING, primaryKey: true },
@@ -113,4 +111,4 @@ class SequelizeAdapter {
   }
 }
 
-export default SequelizeAdapter;
+module.exports = SequelizeAdapter;

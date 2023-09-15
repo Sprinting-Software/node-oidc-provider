@@ -1,6 +1,8 @@
-import { expect } from 'chai';
+const { expect } = require('chai');
 
-import defaults, { deep } from '../../lib/helpers/_/defaults.js';
+const defaults = require('../../lib/helpers/_/defaults');
+
+const { deep: defaultsDeep } = defaults;
 
 describe('defaults', () => {
   it('fills default values in place of undefined', () => {
@@ -43,7 +45,7 @@ describe('defaults', () => {
 describe('defaultsDeep', () => {
   it('fills default values in place of undefined', () => {
     const target = { a: 1, b: undefined };
-    deep(
+    defaultsDeep(
       target,
       { a: 'x', b: 2, c: 3 },
       { c: 'x' },
@@ -57,7 +59,7 @@ describe('defaultsDeep', () => {
 
   it('also handles nested objects', () => {
     expect(
-      deep(
+      defaultsDeep(
         { a: { b: undefined } },
         { a: { b: 2, c: 'x' } },
       ),

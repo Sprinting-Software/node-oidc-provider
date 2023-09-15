@@ -1,28 +1,19 @@
-import { strict as assert } from 'node:assert';
+const { strict: assert } = require('assert');
 
-import moment from 'moment';
-import nock from 'nock';
-import { createSandbox } from 'sinon';
-import { expect } from 'chai';
+const jose = require('jose2');
+const moment = require('moment');
+const nock = require('nock');
+const sinon = require('sinon').createSandbox();
+const { expect } = require('chai');
 
-import * as JWT from '../../lib/helpers/jwt.js';
-import epochTime from '../../lib/helpers/epoch_time.js';
-import bootstrap from '../test_helper.js';
-
-const sinon = createSandbox();
+const JWT = require('../../lib/helpers/jwt');
+const epochTime = require('../../lib/helpers/epoch_time');
+const bootstrap = require('../test_helper');
 
 const endpoint = nock('https://client.example.com/');
+const keystore = new jose.JWKS.KeyStore();
 
-const keys = [{
-  kty: 'EC',
-  x: 'kD4NZtqcBOZIxftx1mj2YivhZAIHthDu3NI2QvC0QDY',
-  y: 'pwAHxPuyDIQJJeoMvQ7uI7LjOfx8cw8fy37YwzGnxcA',
-  crv: 'P-256',
-}];
-
-function setResponse(body = {
-  keys,
-}, statusCode = 200, headers = {}) {
+function setResponse(body = keystore.toJWKS(), statusCode = 200, headers = {}) {
   endpoint
     .get('/jwks')
     .reply(statusCode, typeof body === 'string' ? body : JSON.stringify(body), headers);
@@ -35,7 +26,7 @@ describe('client keystore refresh', () => {
     expect(nock.isDone()).to.be.true;
   });
 
-  before(bootstrap(import.meta.url, { config: 'client_keystore' }));
+  before(bootstrap(__dirname, { config: 'client_keystore' }));
 
   before(async function () {
     return i(this.provider).clientAddStatic({
@@ -43,7 +34,7 @@ describe('client keystore refresh', () => {
       client_secret: 'secret',
       redirect_uris: ['https://client.example.com/cb'],
       jwks_uri: 'https://client.example.com/jwks',
-      id_token_signed_response_alg: 'HS256',
+      id_token_signed_response_alg: 'none',
       id_token_encrypted_response_alg: 'ECDH-ES+A128KW',
       id_token_encrypted_response_enc: 'A128CBC-HS256',
     });
@@ -52,6 +43,7 @@ describe('client keystore refresh', () => {
   afterEach(sinon.restore);
 
   it('gets the jwks from the uri (and does only one request concurrently)', async function () {
+    await keystore.generate('EC', 'P-256');
     setResponse();
 
     const client = await this.provider.Client.find('client');
@@ -64,15 +56,7 @@ describe('client keystore refresh', () => {
   });
 
   it('fails when private keys are encountered (and does only one request concurrently)', async function () {
-    setResponse({
-      keys: [{
-        kty: 'EC',
-        x: 'vu2xH_Rzev40voYeW5clt1BVjyV1sFld60ZfecW5RbM',
-        y: 'bPvB8qkseGy38m8HUQKbsmvtBE_9OEBuUmpJgTRIg28',
-        crv: 'P-256',
-        d: '9YzpRwRvpKsStP7uPqs0yRvbregkHMYIFy-cG_KJCsY',
-      }],
-    });
+    setResponse(keystore.toJWKS(true));
 
     const client = await this.provider.Client.find('client');
     sinon.stub(client.asymmetricKeyStore, 'fresh').returns(false);
@@ -94,12 +78,7 @@ describe('client keystore refresh', () => {
 
   it('adds new keys', async function () {
     const client = await this.provider.Client.find('client');
-    keys.push({
-      kty: 'EC',
-      x: 'pPrd-y2inidf7iiYmB_ymaTWZrBresjbgmnjLzIOiBY',
-      y: 'Wkxz6RSvg9xEvDLppPJ0Bi7psTF974mXSlpuf_x120c',
-      crv: 'P-256',
-    });
+    await keystore.generate('EC', 'P-256');
     setResponse();
 
     sinon.stub(client.asymmetricKeyStore, 'fresh').returns(false);
@@ -159,6 +138,7 @@ describe('client keystore refresh', () => {
   describe('caching', () => {
     it('uses expires caching header to determine stale states', async function () {
       const client = await this.provider.Client.find('client');
+      await keystore.generate('EC', 'P-256');
       const until = moment().add(2, 'hours').toDate();
 
       setResponse(undefined, undefined, {
@@ -179,6 +159,7 @@ describe('client keystore refresh', () => {
 
     it('ignores the cache-control one when expires is provided', async function () {
       const client = await this.provider.Client.find('client');
+      await keystore.generate('EC', 'P-256');
       const until = moment().add(2, 'hours').toDate();
 
       setResponse(undefined, undefined, {
@@ -202,6 +183,7 @@ describe('client keystore refresh', () => {
       this.retries(1);
 
       const client = await this.provider.Client.find('client');
+      await keystore.generate('EC', 'P-256');
 
       setResponse(undefined, undefined, {
         'Cache-Control': 'private, max-age=3600',
@@ -223,6 +205,7 @@ describe('client keystore refresh', () => {
       this.retries(1);
 
       const client = await this.provider.Client.find('client');
+      await keystore.generate('EC', 'P-256');
 
       setResponse();
 

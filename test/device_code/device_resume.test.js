@@ -1,14 +1,13 @@
 /* eslint-disable no-underscore-dangle */
-import { expect } from 'chai';
-import KeyGrip from 'keygrip'; // eslint-disable-line import/no-extraneous-dependencies
-import { createSandbox } from 'sinon';
+const { expect } = require('chai');
+const KeyGrip = require('keygrip'); // eslint-disable-line import/no-extraneous-dependencies
+const sinon = require('sinon').createSandbox();
 
-import nanoid from '../../lib/helpers/nanoid.js';
-import bootstrap, { passInteractionChecks } from '../test_helper.js';
-import epochTime from '../../lib/helpers/epoch_time.js';
-import { generate } from '../../lib/helpers/user_codes.js';
+const nanoid = require('../../lib/helpers/nanoid');
+const bootstrap = require('../test_helper');
+const epochTime = require('../../lib/helpers/epoch_time');
+const { generate } = require('../../lib/helpers/user_codes');
 
-const sinon = createSandbox();
 const { any } = sinon.match;
 
 const expire = new Date();
@@ -19,7 +18,7 @@ let userCode;
 let path;
 
 describe('device interaction resume /device/:uid/', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   beforeEach(function () {
     uid = nanoid();
@@ -68,8 +67,9 @@ describe('device interaction resume /device/:uid/', () => {
     }
 
     this.agent._saveCookies.bind(this.agent)({
-      request: { url: this.provider.issuer },
-      headers: { 'set-cookie': cookies },
+      headers: {
+        'set-cookie': cookies,
+      },
     });
 
     return Promise.all([
@@ -78,7 +78,7 @@ describe('device interaction resume /device/:uid/', () => {
     ]);
   }
 
-  passInteractionChecks('native_client_prompt', () => {
+  bootstrap.passInteractionChecks('native_client_prompt', () => {
     context('general', () => {
       it('needs the resume cookie to be present, else renders an err', async function () {
         const spy = sinon.spy(i(this.provider).configuration('features.deviceFlow'), 'userCodeInputSource');
@@ -95,8 +95,9 @@ describe('device interaction resume /device/:uid/', () => {
 
         // force an invalid sig, hence the framework not loading the cookie
         this.agent._saveCookies.bind(this.agent)({
-          request: { url: this.provider.issuer },
-          headers: { 'set-cookie': `_interaction_resume.sig=; path=${path}; httpOnly` },
+          headers: {
+            'set-cookie': `_interaction_resume.sig=; path=${path}; httpOnly`,
+          },
         });
 
         await this.agent.get(path)
@@ -367,7 +368,7 @@ describe('device interaction resume /device/:uid/', () => {
             logout: 'yes',
           })
           .type('form')
-          .expect(303)
+          .expect(302)
           .expect('location', state.postLogoutRedirectUri);
 
         await this.agent.get(state.postLogoutRedirectUri.replace(this.provider.issuer, ''))

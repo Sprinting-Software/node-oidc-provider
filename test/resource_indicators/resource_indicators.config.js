@@ -1,9 +1,8 @@
-import merge from 'lodash/merge.js';
+const cloneDeep = require('lodash/cloneDeep');
+const merge = require('lodash/merge');
 
-import * as errors from '../../lib/helpers/errors.js';
-import getConfig from '../default.config.js';
-
-const config = getConfig();
+const config = cloneDeep(require('../default.config'));
+const errors = require('../../lib/helpers/errors');
 
 merge(config, {
   issueRefreshToken() {
@@ -28,7 +27,7 @@ merge(config, {
         grant.addOIDCScope(ctx.oidc.requestParamScopes);
 
         const resources = Array.isArray(request.resource) ? request.resource : [request.resource];
-
+        // eslint-disable-next-line no-restricted-syntax
         for (const resource of resources) {
           grant.addResourceScope(resource, request.scope);
         }
@@ -39,8 +38,8 @@ merge(config, {
     },
     resourceIndicators: {
       enabled: true,
-      async useGrantedResource(ctx) {
-        return ctx.oidc.body?.usegranted;
+      useGrantedResource(ctx) {
+        return ctx.oidc.body && ctx.oidc.body.usegranted;
       },
       getResourceServerInfo(ctx, resource) {
         if (resource.includes('wl')) {
@@ -53,7 +52,7 @@ merge(config, {
         throw new errors.InvalidTarget();
       },
       defaultResource(ctx) {
-        if (ctx.oidc.body?.nodefault) {
+        if (ctx.oidc.body && ctx.oidc.body.nodefault) {
           return undefined;
         }
 
@@ -63,7 +62,7 @@ merge(config, {
   },
 });
 
-export default {
+module.exports = {
   config,
   clients: [
     {

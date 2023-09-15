@@ -1,9 +1,9 @@
-import { expect } from 'chai';
+const { expect } = require('chai');
 
-import bootstrap from '../test_helper.js';
+const bootstrap = require('../test_helper');
 
 describe('configuration features.encryption', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   it('extends discovery', function () {
     return this.agent.get('/.well-known/openid-configuration')

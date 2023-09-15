@@ -1,18 +1,18 @@
 /* eslint-disable prefer-const */
 
-import { parse as parseUrl } from 'node:url';
+const { parse: parseUrl } = require('url');
 
-import { expect } from 'chai';
+const { expect } = require('chai');
 
-import bootstrap, { skipConsent } from '../test_helper.js';
-import { decode as decodeJWT } from '../../lib/helpers/jwt.js';
+const bootstrap = require('../test_helper');
+const { decode: decodeJWT } = require('../../lib/helpers/jwt');
 
 const redirect_uri = 'https://client.example.com/cb';
 const scope = 'openid email offline_access';
 const client_id = 'client';
 
 describe('configuration conformIdTokenClaims=false', () => {
-  before(bootstrap(import.meta.url, { config: 'non_conform' }));
+  before(bootstrap(__dirname, { config: 'non_conform' }));
   before(function () {
     return this.login({
       scope,
@@ -20,7 +20,7 @@ describe('configuration conformIdTokenClaims=false', () => {
     });
   });
 
-  skipConsent();
+  bootstrap.skipConsent();
 
   [
     'code id_token token', 'code id_token', 'code token', 'code', 'id_token token', 'id_token',
@@ -38,7 +38,7 @@ describe('configuration conformIdTokenClaims=false', () => {
         const { headers: { location } } = await this.agent
           .get('/auth')
           .query(auth)
-          .expect(303)
+          .expect(302)
           .expect((...args) => {
             if (response_type === 'code') return;
             auth.validateFragment(...args);
@@ -75,7 +75,7 @@ describe('configuration conformIdTokenClaims=false', () => {
             .expect(200));
           this.userinfo = userinfo;
 
-          client.userinfoSignedResponseAlg = 'HS256';
+          client.userinfoSignedResponseAlg = 'none';
           await this.provider.Client.find('client');
           ({ text: userinfo } = await this.agent.get('/me')
             .auth(access_token, { type: 'bearer' })

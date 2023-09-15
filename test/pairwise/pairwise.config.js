@@ -1,12 +1,12 @@
-import getConfig from '../default.config.js';
+const cloneDeep = require('lodash/cloneDeep');
 
-const config = getConfig();
+const config = cloneDeep(require('../default.config'));
 
 config.subjectTypes = ['public', 'pairwise'];
 config.features.ciba = { enabled: true };
 config.features.deviceFlow = { enabled: true };
 
-export default {
+module.exports = {
   config,
   clients: [{
     client_id: 'client',

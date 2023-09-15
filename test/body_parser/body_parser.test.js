@@ -1,11 +1,11 @@
-import Koa from 'koa';
-import mount from 'koa-mount';
-import supertest from 'supertest';
-import { koaBody as upstreamParser } from 'koa-body';
-import sinon from 'sinon';
-import { expect } from 'chai';
+const Koa = require('koa');
+const mount = require('koa-mount');
+const supertest = require('supertest');
+const upstreamParser = require('koa-body');
+const sinon = require('sinon');
+const { expect } = require('chai');
 
-import Provider from '../../lib/index.js';
+const { Provider } = require('../../lib');
 
 describe('body parser', () => {
   afterEach(() => {
@@ -16,6 +16,7 @@ describe('body parser', () => {
     it('uses the upstream parser albeit reluctantly', async () => {
       const provider = new Provider('http://localhost:3000', {
         features: { clientCredentials: { enabled: true } },
+        jwks: global.keystore.toJWKS(true),
         clients: [{
           client_id: 'client',
           client_secret: 'secret',
@@ -46,6 +47,7 @@ describe('body parser', () => {
     it('removes all qs magic', async () => {
       const provider = new Provider('http://localhost:3000', {
         features: { clientCredentials: { enabled: true } },
+        jwks: global.keystore.toJWKS(true),
         clients: [{
           client_id: 'client',
           client_secret: 'secret',
@@ -84,6 +86,7 @@ describe('body parser', () => {
   describe('application/json', () => {
     it('uses the upstream parser albeit reluctantly', async () => {
       const provider = new Provider('http://localhost:3000', {
+        jwks: global.keystore.toJWKS(true),
         features: { registration: { enabled: true } },
       });
       const app = new Koa();
@@ -104,6 +107,7 @@ describe('body parser', () => {
 
     it('handles parsing errors', async () => {
       const provider = new Provider('http://localhost:3000', {
+        jwks: global.keystore.toJWKS(true),
         features: { registration: { enabled: true } },
       });
 

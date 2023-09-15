@@ -1,11 +1,6 @@
 /* eslint-disable max-classes-per-file */
 
-import { strict as assert } from 'node:assert';
-
-import { expect } from 'chai';
-
-import epochTime from '../lib/helpers/epoch_time.js';
-import MemoryAdapter, { setStorage } from '../lib/adapters/memory_adapter.js';
+const { strict: assert } = require('assert');
 
 const map = new Map();
 
@@ -13,12 +8,16 @@ map.del = function (...args) {
   this.delete(...args);
 };
 
-setStorage(map);
+const { expect } = require('chai');
+
+const epochTime = require('../lib/helpers/epoch_time');
+const MemoryAdapter = require('../lib/adapters/memory_adapter');
+
+MemoryAdapter.setStorage(map);
 const testStorage = new Map();
 
-export class TestAdapter extends MemoryAdapter {
+class TestAdapter extends MemoryAdapter {
   constructor(name) {
-    // eslint-disable-next-line no-constructor-return
     if (testStorage.has(name)) return testStorage.get(name);
     super(name);
     this.store = map;
@@ -62,7 +61,7 @@ export class TestAdapter extends MemoryAdapter {
   }
 }
 
-export class Account {
+class Account {
   constructor(id) {
     this.accountId = id;
     testStorage.set(`Account:${this.accountId}`, this);
@@ -122,3 +121,5 @@ export class Account {
     return acc;
   }
 }
+
+module.exports = { Account, TestAdapter };

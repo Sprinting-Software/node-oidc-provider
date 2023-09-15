@@ -1,7 +1,7 @@
-import bootstrap from '../test_helper.js';
+const bootstrap = require('../test_helper');
 
 describe('default error behavior', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   it('responds with json when no Accept header', function () {
     return this.agent.post('/me')

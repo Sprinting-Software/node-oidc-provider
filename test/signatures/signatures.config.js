@@ -1,8 +1,6 @@
-import getConfig from '../default.config.js';
+const config = require('../default.config');
 
-const config = getConfig();
-
-export default {
+module.exports = {
   config,
   clients: [{
     client_id: 'client',
@@ -19,7 +17,7 @@ export default {
     redirect_uris: ['https://client.example.com/cb'],
   }, {
     client_id: 'client-sig-HS256',
-    client_secret: 'secret',
+    client_secret: 'atleast32byteslongforHS256mmkay?',
     response_types: ['code'],
     grant_types: ['authorization_code'],
     id_token_signed_response_alg: 'HS256',

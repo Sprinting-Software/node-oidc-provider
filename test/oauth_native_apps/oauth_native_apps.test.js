@@ -1,11 +1,11 @@
-import { strict as assert } from 'node:assert';
+const { strict: assert } = require('assert');
 
-import { expect } from 'chai';
+const { expect } = require('chai');
 
-import bootstrap from '../test_helper.js';
+const bootstrap = require('../test_helper');
 
 describe('OAuth 2.0 for Native Apps Best Current Practice features', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   describe('changed native client validations', () => {
     describe('Private-use URI Scheme Redirection', () => {

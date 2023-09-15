@@ -1,9 +1,7 @@
-import cloneDeep from 'lodash/cloneDeep.js';
+const cloneDeep = require('lodash/cloneDeep');
 
-import config from './conform.config.js';
-
-const setup = cloneDeep(config);
+const setup = cloneDeep(require('./conform.config'));
 
 setup.config.conformIdTokenClaims = false;
 
-export default setup;
+module.exports = setup;

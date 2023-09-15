@@ -1,13 +1,13 @@
-import { parse as parseUrl } from 'node:url';
+const { parse: parseUrl } = require('url');
 
-import sinon from 'sinon';
-import { expect } from 'chai';
-import snakeCase from 'lodash/snakeCase.js';
+const sinon = require('sinon');
+const { expect } = require('chai');
+const snakeCase = require('lodash/snakeCase');
 
-import bootstrap, { skipConsent } from '../test_helper.js';
+const bootstrap = require('../test_helper');
 
 describe('requests without the openid scope', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   afterEach(function () {
     this.provider.removeAllListeners();
@@ -22,7 +22,7 @@ describe('requests without the openid scope', () => {
         });
 
         await this.wrap({ route: '/auth', verb: 'get', auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validatePresence(['error', 'error_description', 'state'])) // notice state is not expected
           .expect(auth.validateClientLocation)
           .expect(auth.validateError('invalid_request'))
@@ -49,7 +49,7 @@ describe('requests without the openid scope', () => {
           .expect(() => {
             delete client[clientProperty];
           })
-          .expect(303)
+          .expect(302)
           .expect(auth.validatePresence(['error', 'error_description', 'state'])) // notice state is not expected
           .expect(auth.validateClientLocation)
           .expect(auth.validateError('invalid_request'))
@@ -76,7 +76,7 @@ describe('requests without the openid scope', () => {
           this.provider.on('authorization_code.saved', spy);
 
           await this.wrap({ route: '/auth', verb: 'get', auth })
-            .expect(303)
+            .expect(302)
             .expect(auth.validateClientLocation)
             .expect(auth.validatePresence(['code', 'state']));
 
@@ -92,7 +92,7 @@ describe('requests without the openid scope', () => {
             });
 
             await this.wrap({ route: '/auth', verb: 'get', auth })
-              .expect(303)
+              .expect(302)
               .expect(auth.validateClientLocation)
               .expect(auth.validatePresence(['code', 'state']))
               .expect((response) => {
@@ -159,7 +159,7 @@ describe('requests without the openid scope', () => {
         });
 
         describe('refresh token exchange', () => {
-          skipConsent();
+          bootstrap.skipConsent();
           const refreshScope = `${scope || ''} offline_access`.trim();
 
           before(function () { return this.login({ scope: [scope, 'offline_access'].join(' ') }); });
@@ -173,7 +173,7 @@ describe('requests without the openid scope', () => {
 
             let code;
             await this.wrap({ route: '/auth', verb: 'get', auth })
-              .expect(303)
+              .expect(302)
               .expect(auth.validateClientLocation)
               .expect(auth.validatePresence(['code', 'state']))
               .expect((response) => {
@@ -233,7 +233,7 @@ describe('requests without the openid scope', () => {
           this.provider.on('authorization.success', spy);
 
           await this.wrap({ route: '/auth', verb: 'get', auth })
-            .expect(303)
+            .expect(302)
             .expect(auth.validateClientLocation)
             .expect(auth.validatePresence(['state']));
 
@@ -356,7 +356,7 @@ describe('requests without the openid scope', () => {
         delete auth.state;
 
         await this.wrap({ route: '/auth', verb: 'get', auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['error', 'error_description'])) // notice state is not expected
           .expect(auth.validateClientLocation)
@@ -373,7 +373,7 @@ describe('requests without the openid scope', () => {
         delete auth.state;
 
         await this.wrap({ route: '/auth', verb: 'get', auth })
-          .expect(303)
+          .expect(302)
           .expect(auth.validateFragment)
           .expect(auth.validatePresence(['error', 'error_description'])) // notice state is not expected
           .expect(auth.validateClientLocation)

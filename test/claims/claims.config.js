@@ -1,15 +1,14 @@
-import merge from 'lodash/merge.js';
+const cloneDeep = require('lodash/cloneDeep');
+const merge = require('lodash/merge');
 
-import getConfig from '../default.config.js';
-
-const config = getConfig();
+const config = cloneDeep(require('../default.config'));
 
 config.subjectTypes = ['pairwise', 'public'];
 merge(config.features, { claimsParameter: { enabled: true } });
 config.acrValues = ['0', '1', '2'];
 config.pairwiseIdentifier = (ctx, sub) => `${sub}-pairwise`;
 
-export default {
+module.exports = {
   config,
   clients: [
     {

@@ -3,17 +3,9 @@
  */
 
 // npm i ioredis@^4.0.0
-import Redis from 'ioredis'; // eslint-disable-line import/no-unresolved
+const Redis = require('ioredis'); // eslint-disable-line import/no-unresolved
 
 const client = new Redis(process.env.REDIS_URL);
-
-const grantable = new Set([
-  'AccessToken',
-  'AuthorizationCode',
-  'RefreshToken',
-  'DeviceCode',
-  'BackchannelAuthenticationRequest',
-]);
 
 function grantKeyFor(id) {
   return `oidc:grant:${id}`;
@@ -43,7 +35,7 @@ class RedisAdapter {
       multi.expire(key, expiresIn);
     }
 
-    if (grantable.has(this.name) && payload.grantId) {
+    if (payload.grantId) {
       const grantKey = grantKeyFor(payload.grantId);
       multi.rpush(grantKey, key);
       // if you're seeing grant key lists growing out of acceptable proportions consider using LTRIM
@@ -108,4 +100,4 @@ class RedisAdapter {
   }
 }
 
-export default RedisAdapter;
+module.exports = RedisAdapter;

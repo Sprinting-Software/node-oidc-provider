@@ -1,24 +1,20 @@
 /* eslint-disable no-await-in-loop */
-import { strict as assert } from 'node:assert';
-import { createWriteStream, writeFileSync } from 'node:fs';
-import * as stream from 'node:stream';
-import { promisify } from 'node:util';
+const { strict: assert } = require('assert');
+const { createWriteStream } = require('fs');
 
-import got from 'got'; // eslint-disable-line import/no-unresolved
-import ms from 'ms';
+const Got = require('got');
+const ms = require('ms');
 
-import debug from './debug.js';
-
-const pipeline = promisify(stream.pipeline);
+const debug = require('./debug');
 
 const FINISHED = new Set(['FINISHED']);
-const RESULTS = new Set(['REVIEW', 'PASSED', 'WARNING', 'SKIPPED']);
+const RESULTS = new Set(['REVIEW', 'PASSED', 'SKIPPED']);
 
 class API {
   constructor({ baseUrl, bearerToken } = {}) {
     assert(baseUrl, 'argument property "baseUrl" missing');
 
-    const { get, post } = got.extend({
+    const { get, post } = Got.extend({
       prefixUrl: baseUrl,
       throwHttpErrors: false,
       followRedirect: false,
@@ -27,16 +23,11 @@ class API {
         'content-type': 'application/json',
       },
       responseType: 'json',
-      retry: { limit: 0 },
-      https: {
-        rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0',
-      },
+      retry: 0,
+      timeout: 10000,
     });
 
-    this.get = get;
-    this.post = post;
-
-    this.stream = got.extend({
+    const { stream } = Got.extend({
       prefixUrl: baseUrl,
       throwHttpErrors: false,
       followRedirect: false,
@@ -44,11 +35,12 @@ class API {
         ...(bearerToken ? { authorization: `bearer ${bearerToken}` } : undefined),
         'content-type': 'application/json',
       },
-      retry: { limit: 0 },
-      https: {
-        rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0',
-      },
-    }).stream;
+      retry: 0,
+    });
+
+    this.get = get;
+    this.stream = stream;
+    this.post = post;
   }
 
   async getAllTestModules() {
@@ -117,20 +109,19 @@ class API {
 
   async downloadArtifact({ planId } = {}) {
     assert(planId, 'argument property "planId" missing');
-    const filename = `export-${planId}.zip`;
-    if (process.env.GITHUB_ENV) {
-      writeFileSync(process.env.GITHUB_ENV, `EXPORT_FILE=${filename}`, { flag: 'a' });
-    }
-    if (process.env.GITHUB_STEP_SUMMARY) {
-      writeFileSync(process.env.GITHUB_STEP_SUMMARY, `\n\nArtifact: \`${filename}\``, { flag: 'a' });
-    }
-    return pipeline(
-      this.stream(`api/plan/exporthtml/${planId}`, {
+    await new Promise((resolve) => {
+      const download = this.stream(`api/plan/exporthtml/${planId}`, {
         headers: { accept: 'application/zip' },
         responseType: 'buffer',
-      }),
-      createWriteStream(filename),
-    );
+      });
+
+      const filename = `export-${planId}.zip`;
+      download.pipe(createWriteStream(filename));
+      download.on('close', () => {
+        console.log(`Logs in ${filename}.`); // eslint-disable-line no-console
+        resolve();
+      });
+    });
   }
 
   async waitForState({ moduleId, timeout = ms('4m') } = {}) {
@@ -158,7 +149,7 @@ class API {
         throw new Error(`module id ${moduleId} is ${status}`);
       }
 
-      await new Promise((resolve) => { setTimeout(resolve, ms('2s')); });
+      await new Promise((resolve) => setTimeout(resolve, ms('2s')));
     }
 
     debug(`module id ${moduleId} expected state timeout`);
@@ -166,4 +157,4 @@ class API {
   }
 }
 
-export default API;
+module.exports = API;

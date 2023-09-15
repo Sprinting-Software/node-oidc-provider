@@ -10,8 +10,7 @@ class MyAdapter {
    * @constructor
    * @param {string} name Name of the oidc-provider model. One of "Grant, "Session", "AccessToken",
    * "AuthorizationCode", "RefreshToken", "ClientCredentials", "Client", "InitialAccessToken",
-   * "RegistrationAccessToken", "DeviceCode", "Interaction", "ReplayDetection",
-   * "BackchannelAuthenticationRequest", or "PushedAuthorizationRequest"
+   * "RegistrationAccessToken", "DeviceCode", "Interaction", "ReplayDetection", or "PushedAuthorizationRequest"
    *
    */
   constructor(name) {
@@ -72,21 +71,17 @@ class MyAdapter {
      * - gty {string} - [AccessToken, RefreshToken only] space delimited grant values, indicating
      *     the grant type(s) they originate from (implicit, authorization_code, refresh_token or
      *     device_code) the original one is always first, second is refresh_token if refreshed
-     * - params {object} - [DeviceCode and BackchannelAuthenticationRequest only] an object with the
-     *     authorization request parameters as requested by the client with device_authorization_endpoint
+     * - params {object} - [DeviceCode only] an object with the authorization request parameters
+     *     as requested by the client with device_authorization_endpoint
      * - userCode {string} - [DeviceCode only] user code value
      * - deviceInfo {object} - [DeviceCode only] an object with details about the
      *     device_authorization_endpoint request
      * - inFlight {boolean} - [DeviceCode only]
-     * - error {string} - [DeviceCode and BackchannelAuthenticationRequest only] - error from authnz to be
-     *     returned to the polling client
-     * - errorDescription {string} - [DeviceCode and BackchannelAuthenticationRequest only] - error_description
-     *     from authnz to be returned to the polling client
+     * - error {string} - [DeviceCode only] - error from authnz to be returned to the polling client
+     * - errorDescription {string} - [DeviceCode only] - error_description from authnz to be returned
+     *     to the polling client
      * - policies {string[]} - [InitialAccessToken, RegistrationAccessToken only] array of policies
      * - request {string} - [PushedAuthorizationRequest only] Pushed Request Object value
-     * - dpopJkt {string} - [PushedAuthorizationRequest only] Calculated or provided dpop_jkt parameter
-     * - trusted {boolean} - [PushedAuthorizationRequest only] Whether the parameters in the PAR object
-     *     were coming from an authenticated request or an authenticated source.
      *
      * Client model will only use this when registered through Dynamic Registration features and
      * will contain all client properties.
@@ -140,7 +135,6 @@ class MyAdapter {
      * - trusted {string[]} - parameter names that come from a trusted source
      * - result {object} - interaction results object is expected here
      * - grantId {string} - grant identifier if there's a preexisting one
-     * - cid {string} - correlating identifier for the Authorization request
      * - session {object}
      * - session.uid {string} - uid of the session this Interaction belongs to
      * - session.cookie {string} - jti of the session this Interaction belongs to
@@ -243,4 +237,4 @@ class MyAdapter {
   }
 }
 
-export default MyAdapter;
+module.exports = MyAdapter;

@@ -1,18 +1,17 @@
-import { createSecretKey, randomBytes } from 'node:crypto';
-import { parse } from 'node:url';
+const { createSecretKey, randomBytes } = require('crypto');
+const { parse } = require('url');
 
-import { importJWK } from 'jose';
-import { createSandbox } from 'sinon';
-import nock from 'nock';
-import { expect } from 'chai';
+const { parseJwk } = require('jose/jwk/parse'); // eslint-disable-line import/no-unresolved
+const sinon = require('sinon').createSandbox();
+const nock = require('nock');
+const { expect } = require('chai');
 
-import * as JWT from '../../lib/helpers/jwt.js';
-import RequestUriCache from '../../lib/helpers/request_uri_cache.js';
-import bootstrap from '../test_helper.js';
+const JWT = require('../../lib/helpers/jwt');
+const RequestUriCache = require('../../lib/helpers/request_uri_cache');
+const bootstrap = require('../test_helper');
 
-const sinon = createSandbox();
 describe('request Uri features', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
   beforeEach(nock.cleanAll);
 
   describe('configuration features.requestUri', () => {
@@ -53,10 +52,14 @@ describe('request Uri features', () => {
     });
     expect(actual.query).to.have.property('code');
   }
+  function httpSuccess({ body }) {
+    expect(body).to.contain.key('device_code');
+  }
 
   [
-    ['/auth', 'get', 'authorization.error', 303, 303, redirectSuccess],
-    ['/auth', 'post', 'authorization.error', 303, 303, redirectSuccess],
+    ['/auth', 'get', 'authorization.error', 302, 302, redirectSuccess],
+    ['/auth', 'post', 'authorization.error', 302, 302, redirectSuccess],
+    ['/device/auth', 'post', 'device_authorization.error', 200, 400, httpSuccess],
   ].forEach(([route, verb, error, successCode, errorCode, successFnCheck]) => {
     describe(`${route} ${verb} passing request parameters in request_uri`, () => {
       before(function () { return this.login(); });
@@ -65,14 +68,12 @@ describe('request Uri features', () => {
       it('works with signed by an actual alg (https)', async function () {
         const client = await this.provider.Client.find('client-with-HS-sig');
         let [key] = client.symmetricKeyStore.selectForSign({ alg: 'HS256' });
-        key = await importJWK(key);
+        key = await parseJwk(key);
         const request = await JWT.sign({
-          jti: randomBytes(16).toString('base64url'),
-          scope: 'openid',
           client_id: 'client-with-HS-sig',
           response_type: 'code',
           redirect_uri: 'https://client.example.com/cb',
-        }, key, 'HS256', { issuer: 'client-with-HS-sig', audience: this.provider.issuer, expiresIn: 30 });
+        }, key, 'HS256', { issuer: 'client-with-HS-sig', audience: this.provider.issuer });
 
         nock('https://client.example.com')
           .get('/request')
@@ -96,14 +97,12 @@ describe('request Uri features', () => {
       it('works with signed by an actual alg (http)', async function () {
         const client = await this.provider.Client.find('client-with-HS-sig');
         let [key] = client.symmetricKeyStore.selectForSign({ alg: 'HS256' });
-        key = await importJWK(key);
+        key = await parseJwk(key);
         const request = await JWT.sign({
-          jti: randomBytes(16).toString('base64url'),
-          scope: 'openid',
           client_id: 'client-with-HS-sig',
           response_type: 'code',
           redirect_uri: 'https://client.example.com/cb',
-        }, key, 'HS256', { issuer: 'client-with-HS-sig', audience: this.provider.issuer, expiresIn: 30 });
+        }, key, 'HS256', { issuer: 'client-with-HS-sig', audience: this.provider.issuer });
 
         nock('http://client.example.com')
           .get('/request')
@@ -122,6 +121,68 @@ describe('request Uri features', () => {
         })
           .expect(successCode)
           .expect(successFnCheck);
+      });
+
+      it('works with signed by none (https)', async function () {
+        const request = await JWT.sign({
+          client_id: 'client',
+          response_type: 'code',
+          redirect_uri: 'https://client.example.com/cb',
+        }, null, 'none', { issuer: 'client', audience: this.provider.issuer });
+
+        nock('https://client.example.com')
+          .get('/request')
+          .reply(200, request);
+
+        return this.wrap({
+          agent: this.agent,
+          route,
+          verb,
+          auth: {
+            request_uri: `https://client.example.com/request#${Math.random()}`,
+            scope: 'openid',
+            client_id: 'client',
+            response_type: 'code',
+          },
+        })
+          .expect(successCode)
+          .expect(successFnCheck);
+      });
+
+      it('forbids http signed by none', async function () {
+        const spy = sinon.spy();
+        this.provider.once(error, spy);
+
+        const request = await JWT.sign({
+          client_id: 'client',
+          response_type: 'code',
+          redirect_uri: 'https://client.example.com/cb',
+        }, null, 'none', { issuer: 'client', audience: this.provider.issuer });
+
+        nock('http://client.example.com')
+          .get('/request')
+          .reply(200, request);
+
+        return this.wrap({
+          agent: this.agent,
+          route,
+          verb,
+          auth: {
+            request_uri: `http://client.example.com/request#${Math.random()}`,
+            scope: 'openid',
+            client_id: 'client',
+            response_type: 'code',
+          },
+        })
+          .expect(errorCode)
+          .expect(() => {
+            expect(spy.calledOnce).to.be.true;
+            expect(spy.args[0][1]).to.have.property('message', 'invalid_request_object');
+            expect(spy.args[0][1]).to.have.property(
+              'error_description',
+              'Request Object from insecure request_uri must be signed and/or symmetrically encrypted',
+            );
+          });
       });
 
       it('forbids non urn: or web schemes', function () {
@@ -162,10 +223,9 @@ describe('request Uri features', () => {
         it('checks the allow list', async function () {
           const request = await JWT.sign({
             client_id: 'client',
-            scope: 'openid',
             response_type: 'code',
             redirect_uri: 'https://client.example.com/cb',
-          }, Buffer.from('secret'), 'HS256', { issuer: 'client', audience: this.provider.issuer, expiresIn: 30 });
+          }, null, 'none', { issuer: 'client', audience: this.provider.issuer });
 
           nock('https://thisoneisallowed.com')
             .get('/')
@@ -188,14 +248,12 @@ describe('request Uri features', () => {
 
         it('allows for fragments to be provided', async function () {
           const request = await JWT.sign({
-            jti: randomBytes(16).toString('base64url'),
             client_id: 'client',
-            scope: 'openid',
             response_type: 'code',
             redirect_uri: 'https://client.example.com/cb',
-          }, Buffer.from('secret'), 'HS256', { issuer: 'client', audience: this.provider.issuer, expiresIn: 30 });
+          }, null, 'none', { issuer: 'client', audience: this.provider.issuer });
 
-          nock(`https://thisoneisallowed.com#${randomBytes(16).toString('base64url')}`)
+          nock('https://thisoneisallowed.com#hash234')
             .get('/')
             .reply(200, request);
 
@@ -204,7 +262,7 @@ describe('request Uri features', () => {
             route,
             verb,
             auth: {
-              request_uri: `https://thisoneisallowed.com#${randomBytes(16).toString('base64url')}`,
+              request_uri: 'https://thisoneisallowed.com#hash234',
               scope: 'openid',
               client_id: 'client',
               response_type: 'code',
@@ -274,7 +332,7 @@ describe('request Uri features', () => {
 
         nock('https://client.example.com')
           .get('/request')
-          .reply(303, 'redirecting', {
+          .reply(302, 'redirecting', {
             location: '/someotherrequest',
           });
 
@@ -302,12 +360,11 @@ describe('request Uri features', () => {
         this.provider.once(error, spy);
 
         const request = await JWT.sign({
-          jti: randomBytes(16).toString('base64url'),
           client_id: 'client',
           response_type: 'code',
           request: 'request inception',
           redirect_uri: 'https://client.example.com/cb',
-        }, Buffer.from('secret'), 'HS256', { issuer: 'client', audience: this.provider.issuer, expiresIn: 30 });
+        }, null, 'none', { issuer: 'client', audience: this.provider.issuer });
 
         return this.wrap({
           agent: this.agent,
@@ -337,12 +394,11 @@ describe('request Uri features', () => {
         this.provider.once(error, spy);
 
         const request = await JWT.sign({
-          jti: randomBytes(16).toString('base64url'),
           client_id: 'client',
           response_type: 'code',
           request: 'request inception',
           redirect_uri: 'https://client.example.com/cb',
-        }, Buffer.from('secret'), 'HS256', { issuer: 'client', audience: this.provider.issuer, expiresIn: 30 });
+        }, null, 'none', { issuer: 'client', audience: this.provider.issuer });
 
         nock('https://client.example.com')
           .get('/request')
@@ -375,12 +431,11 @@ describe('request Uri features', () => {
         this.provider.once(error, spy);
 
         const request = await JWT.sign({
-          jti: randomBytes(16).toString('base64url'),
           client_id: 'client',
           response_type: 'code',
           request_uri: 'request uri inception',
           redirect_uri: 'https://client.example.com/cb',
-        }, Buffer.from('secret'), 'HS256', { issuer: 'client', audience: this.provider.issuer, expiresIn: 30 });
+        }, null, 'none', { issuer: 'client', audience: this.provider.issuer });
 
         nock('https://client.example.com')
           .get('/request')
@@ -413,11 +468,10 @@ describe('request Uri features', () => {
         this.provider.once(error, spy);
 
         const request = await JWT.sign({
-          jti: randomBytes(16).toString('base64url'),
           client_id: 'client2',
           response_type: 'code',
           redirect_uri: 'https://client.example.com/cb',
-        }, Buffer.from('secret'), 'HS256', { issuer: 'client2', audience: this.provider.issuer, expiresIn: 30 });
+        }, null, 'none', { issuer: 'client2', audience: this.provider.issuer });
 
         nock('https://client.example.com')
           .get('/request')
@@ -477,11 +531,10 @@ describe('request Uri features', () => {
         this.provider.once(error, spy);
 
         const request = await JWT.sign({
-          jti: randomBytes(16).toString('base64url'),
           client_id: 'client-with-HS-sig',
           response_type: 'code',
           redirect_uri: 'https://client.example.com/cb',
-        }, Buffer.from('secret'), 'HS512', { issuer: 'client-with-HS-sig', audience: this.provider.issuer, expiresIn: 30 });
+        }, null, 'none', { issuer: 'client-with-HS-sig', audience: this.provider.issuer });
 
         nock('https://client.example.com')
           .get('/request')
@@ -514,11 +567,10 @@ describe('request Uri features', () => {
         this.provider.once(error, spy);
 
         const request = await JWT.sign({
-          jti: randomBytes(16).toString('base64url'),
           client_id: 'client',
           response_type: 'code',
           redirect_uri: 'https://client.example.com/cb',
-        }, createSecretKey(randomBytes(48)), 'HS384', { issuer: 'client', audience: this.provider.issuer, expiresIn: 30 });
+        }, createSecretKey(randomBytes(48)), 'HS384', { issuer: 'client', audience: this.provider.issuer });
 
         nock('https://client.example.com')
           .get('/request')
@@ -547,12 +599,14 @@ describe('request Uri features', () => {
         const spy = sinon.spy();
         this.provider.once(error, spy);
 
+        const client = await this.provider.Client.find('client-with-HS-sig');
+        let [key] = client.symmetricKeyStore.selectForSign({ alg: 'HS256' });
+        key = await parseJwk(key);
         const request = await JWT.sign({
-          jti: randomBytes(16).toString('base64url'),
           client_id: 'client',
           response_type: 'code',
           redirect_uri: 'https://client.example.com/cb',
-        }, Buffer.from('not THE secret'), 'HS256', { issuer: 'client', audience: this.provider.issuer, expiresIn: 30 });
+        }, key, 'HS256', { issuer: 'client', audience: this.provider.issuer });
 
         nock('https://client.example.com')
           .get('/request')

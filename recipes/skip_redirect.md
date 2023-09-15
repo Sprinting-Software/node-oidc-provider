@@ -1,9 +1,9 @@
 # Render invalid_request errors
 
-- built for version: ^8.0.0
+- built for version: ^7.1.0
 
 ```js
-import { errors } from 'oidc-provider';
+const { errors } = require('oidc-provider');
 Object.defineProperty(errors.InvalidRequest.prototype, 'allow_redirect', { value: false });
 ```
 

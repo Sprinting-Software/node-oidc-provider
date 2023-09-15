@@ -1,10 +1,10 @@
-import { expect } from 'chai';
+const { expect } = require('chai');
 
-import Provider from '../../lib/index.js';
-import bootstrap from '../test_helper.js';
+const { Provider } = require('../../lib');
+const bootstrap = require('../test_helper');
 
 describe('configuration features.deviceFlow', () => {
-  before(bootstrap(import.meta.url));
+  before(bootstrap(__dirname));
 
   it('can only be configured with digits and base-20 charset', () => {
     expect(() => {

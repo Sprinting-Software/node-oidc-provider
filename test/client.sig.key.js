@@ -1,4 +1,4 @@
-export default {
+module.exports = {
   kty: 'RSA',
   kid: 'aeR7dRJK-JooXUtywZMx_y3b9_72hU7ZliAqbAO_hjc',
   e: 'AQAB',

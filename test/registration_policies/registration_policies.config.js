@@ -1,11 +1,10 @@
-import merge from 'lodash/merge.js';
+const cloneDeep = require('lodash/cloneDeep');
+const merge = require('lodash/merge');
 
-import getConfig from '../default.config.js';
-
-const config = getConfig();
+const config = cloneDeep(require('../default.config'));
 
 merge(config.features, {
-  registrationManagement: { enabled: true, rotateRegistrationAccessToken: false },
+  registrationManagement: { enabled: true },
   registration: {
     enabled: true,
     initialAccessToken: true,
@@ -15,6 +14,6 @@ merge(config.features, {
   },
 });
 
-export default {
+module.exports = {
   config,
 };

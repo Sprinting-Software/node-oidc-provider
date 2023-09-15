@@ -1,6 +1,6 @@
-import { expect } from 'chai';
+const { expect } = require('chai');
 
-import merge from '../../lib/helpers/_/merge.js';
+const merge = require('../../lib/helpers/_/merge');
 
 describe('merge', () => {
   it('merges objects', () => {
